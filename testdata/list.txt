@@ -1,0 +1,2 @@
+Utterance_1	./this_is_a_test-en_us-16.wav
+Utterance_2  ./the_second_test-en_us-16.wav

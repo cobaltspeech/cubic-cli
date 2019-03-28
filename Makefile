@@ -65,12 +65,12 @@ RELEASE_PLATFORMS := $(addprefix release-,$(PLATFORMS))
 
 $(DEBUG_PLATFORMS): mod
 	mkdir -p $(BINDIR)/debug
-	GOOS=$(goos) GOARCH=amd64 go build -o $(BINDIR)/debug/$(CLI_BINARY)-$(goos)-amd64$(ext) -ldflags "$(LDFLAGSVERSION)" ./
+	GOOS=$(goos) GOARCH=amd64 go build -o $(BINDIR)/debug/$(CLI_BINARY)-$(goos)-amd64$(ext) -ldflags "$(LDFLAGSVERSION)" ./cmd/cubic-cli
 
 
 $(RELEASE_PLATFORMS): mod
 	mkdir -p $(BINDIR)/release
-	GOOS=$(goos) GOARCH=amd64 go build -o $(BINDIR)/release/$(CLI_BINARY)-$(goos)-amd64$(ext) -ldflags "-s -w $(LDFLAGSVERSION)" ./
+	GOOS=$(goos) GOARCH=amd64 go build -o $(BINDIR)/release/$(CLI_BINARY)-$(goos)-amd64$(ext) -ldflags "-s -w $(LDFLAGSVERSION)" ./cmd/cubic-cli
 
 .PHONY: debug release
 debug: $(DEBUG_PLATFORMS)
@@ -81,7 +81,7 @@ release: $(RELEASE_PLATFORMS)
 # General current build
 .PHONY: build
 build: mod
-	go build -ldflags "-s -w $(LDFLAGSVERSION)" -o $(BINDIR)/$(CLI_BINARY) ./
+	go build -ldflags "-s -w $(LDFLAGSVERSION)" -o $(BINDIR)/$(CLI_BINARY) ./cmd/cubic-cli
 
 # Clean
 .PHONY: clean

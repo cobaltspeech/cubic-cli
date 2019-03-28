@@ -4,6 +4,8 @@
 
 This folder (and resulting binary) can be used to send audio file(s) to a running instance of a cubic server.  It consists of several sub-commands:
 
+| Command                | Purpose |
+| ---------------------- | ------- |
 | `cubic-cli`            | Prints the default help message. |
 | `cubic-cli models`     | Displays the transcription models being served by the given instance. |
 | `cubic-cli version`    | Displays the versions of both the client and the server. |
@@ -18,7 +20,7 @@ Specifically `make build`.
 
 TODO: Make this compatable with the `go get` or `go install` process.
 
-## Running/testing
+## Running
 
 There are two audio files in the testdata folder.
 They are US English, recorded at 16kHz.

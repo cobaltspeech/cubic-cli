@@ -84,8 +84,14 @@ In single file mode:
 In list file mode:
     The FILE_PATH should point to a a file listing multiple audio files
     with the format 'Utterance_ID \t FILE_PATH \n'.
-    Each entry should be on its own line.  
+    Each entry should be on its own line.
     Utterance_IDs may not contain whitespace.
+
+Audio files in the following formats are supported:
+    WAV, FLAC, MP3, VOX, and RAW(PCM16SLE).
+
+The file extension (wav, flac, mp3, vox, raw) will be used to determine which
+ codec to use.  Use WAV or FLAC for best results.
 
 See 'transcribe --help' for details on the other flags.`
 
@@ -330,8 +336,27 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 			errChannel <- fmt.Errorf(
 				"Error: skipping Utterance '%s', couldn't open file '%s'",
 				input.uttID, input.filepath)
+			continue
 		}
 
+		var audioEncoding cubicpb.RecognitionConfig_Encoding
+		ext := strings.ToLower(filepath.Ext(input.filepath))
+		switch ext {
+		case ".wav":
+			audioEncoding = cubicpb.RecognitionConfig_WAV
+		case ".flac":
+			audioEncoding = cubicpb.RecognitionConfig_FLAC
+		case ".mp3":
+			audioEncoding = cubicpb.RecognitionConfig_MP3
+		case ".vox":
+			audioEncoding = cubicpb.RecognitionConfig_VOX8000
+		case ".raw":
+			audioEncoding = cubicpb.RecognitionConfig_RAW_LINEAR16
+		default:
+			errChannel <- fmt.Errorf("skipping utterance %q: unknown file extension %q", input.uttID, ext)
+			continue
+
+		}
 		// Counter for segments
 		segmentID := 0
 
@@ -342,7 +367,7 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 		err = client.StreamingRecognize(context.Background(),
 			&cubicpb.RecognitionConfig{
 				ModelId:               model,
-				AudioEncoding:         cubicpb.RecognitionConfig_WAV,
+				AudioEncoding:         audioEncoding,
 				EnableWordTimeOffsets: true,
 				EnableRawTranscript:   true,
 				IdleTimeout:           &pbduration.Duration{Seconds: 30},

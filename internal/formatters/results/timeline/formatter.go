@@ -59,7 +59,7 @@ func Format(results []*cubicpb.RecognitionResult) string {
 		if entries[i].startTime != -1 {
 			return entries[i].channelID < entries[j].channelID
 		}
-		return true
+		return false // Maintain the same order
 	})
 
 	// Convert each entry to the formatted string.

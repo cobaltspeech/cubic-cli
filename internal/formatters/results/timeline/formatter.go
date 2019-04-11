@@ -30,6 +30,12 @@ func Format(results []*cubicpb.RecognitionResult) string {
 			continue
 		}
 
+		// Sometimes, there are entries that have an empty transcript as the most confident result, but may have other
+		// transcripts at lower confidences.  For the purpose of the timeline, we prune those out.
+		if hasEmptyTranscript(result) {
+			continue
+		}
+
 		entries = append(entries, utterance{
 			startTime:  startTime(result),
 			channelID:  int(result.AudioChannel),
@@ -46,7 +52,14 @@ func Format(results []*cubicpb.RecognitionResult) string {
 		if entries[i].startTime != entries[j].startTime {
 			return entries[i].startTime < entries[j].startTime
 		}
-		return entries[i].channelID < entries[j].channelID
+
+		// Note: If the config didn't include {EnableWordTimeOffsets: true, EnableRawTranscript: true}
+		// then they won't get timestamps, Meaning, start times are _all_ -1.
+		// If that's the case, TODO(jhollowayj): do we want to skip sorting by channelID?
+		if entries[i].startTime != -1 {
+			return entries[i].channelID < entries[j].channelID
+		}
+		return true
 	})
 
 	// Convert each entry to the formatted string.
@@ -60,11 +73,15 @@ func Format(results []*cubicpb.RecognitionResult) string {
 
 // Returns the start time in ms of the given RecognitionResult
 func startTime(r *cubicpb.RecognitionResult) int {
-	if len(r.Alternatives) < 1 || len(r.Alternatives[0].Words) < 1 {
+	if len(r.Alternatives) == 0 || len(r.Alternatives[0].Words) == 0 {
 		// TODO: This will show up as -1000 in the final result, and show up at the top of the transcription
 		// Do we need to throw an error instead?
 		return -1
 	}
 	d := r.Alternatives[0].Words[0].StartTime
 	return int(d.Seconds*1000) + int(d.Nanos/1000/1000)
+}
+
+func hasEmptyTranscript(r *cubicpb.RecognitionResult) bool {
+	return len(r.Alternatives) < 1 || r.Alternatives[0].Transcript == ""
 }

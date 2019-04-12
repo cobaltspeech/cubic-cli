@@ -19,11 +19,12 @@ func TestExxonFormatter_Order(t *testing.T) {
 		newResult("Two", 750, 1, false),
 		newResult("One0", 500, 0, false),
 		newResult("One1", 500, 1, false),
-		newResult("partials are ignored", 1500, 0, true),
+		newResult("One0.1", 500, 0, false),
+		newResult("partials are ignored", 1500, 0, true), // Shouldn't show up as a partial result.
+		newResult("", 1500, 0, false),                    // Shouldn't show up with an empty transcript.
 	}
 
-	// Note the order of `500|0|One_#_` is different between these two
-	want := "500|0|One0\n500|1|One1\n750|1|Two\n7500|0|Three"
+	want := "500|0|One0\n500|1|One1\n500|0|One0.1\n750|1|Two\n7500|0|Three"
 
 	// Format the test RecognitionResult.
 	got := timeline.Format(input)

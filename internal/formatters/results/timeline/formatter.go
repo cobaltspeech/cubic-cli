@@ -11,10 +11,20 @@ import (
 )
 
 // Format generates a list of formatted utterances.
-// The format of a single utterance is "start_time_ms|audio_channel_id|1-best transcript"
-// The list will be sorted by starttime, smallest to largets.
-// No spaces will be present until after the second pipe ('|')
-// If the startTime in milliseconds is the same value, the order in which transcripts are listed is undefined.
+// The format of each utterance is "start_time_ms|audio_channel_id|1-best transcript".
+//
+// Some assumptions:
+// * The config used in the original transcribe request included, so that timestamps will be available:
+//   &cubicpb.RecognitionConfig{
+//     EnableWordTimeOffsets: true,
+//     EnableRawTranscript: true
+//   }
+//
+// Some Promises:
+// * The list will be sorted by starttime, smallest to largets.
+// * No spaces will be present until after the second pipe ('|')
+// * If the startTime in milliseconds is the same value, the order in which transcripts are.
+// * If there is no value in the results.Alternatives[0].Words[0].StartTime, a time of -1 will be assumed.
 func Format(results []*cubicpb.RecognitionResult) string {
 	// Intermediate representation
 	type utterance struct {
@@ -43,23 +53,18 @@ func Format(results []*cubicpb.RecognitionResult) string {
 		})
 	}
 
-	// Sort by startTime (resp.Results.Alternatives[0].Words[0].StartTime)
-	// If start times are the same, sort by channelID.
+	// Sort by startTime (results.Alternatives[0].Words[0].StartTime)
+	// If start times are the same, maintain the original order.
+	//
 	// While CubicSvr guarentees that the of results entries are order
 	// chronologicaly _per channel_, there is no such promise made about the
 	// relationship between channels. Thus, the following sort is required.
 	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].startTime != entries[j].startTime {
-			return entries[i].startTime < entries[j].startTime
-		}
-
 		// Note: If the config didn't include {EnableWordTimeOffsets: true, EnableRawTranscript: true}
-		// then they won't get timestamps, Meaning, start times are _all_ -1.
-		// If that's the case, TODO(jhollowayj): do we want to skip sorting by channelID?
-		if entries[i].startTime != -1 {
-			return entries[i].channelID < entries[j].channelID
-		}
-		return false // Maintain the same order
+		// then they won't get timestamps, meaning start times are _all_ -1.
+		// If that's the case, we can just maintain the same order they came in.
+		// To do that, this function should return false.  `t1 < t2` still matches that pattern.
+		return entries[i].startTime < entries[j].startTime
 	})
 
 	// Convert each entry to the formatted string.
@@ -74,8 +79,10 @@ func Format(results []*cubicpb.RecognitionResult) string {
 // Returns the start time in ms of the given RecognitionResult
 func startTime(r *cubicpb.RecognitionResult) int {
 	if len(r.Alternatives) == 0 || len(r.Alternatives[0].Words) == 0 {
-		// TODO: This will show up as -1000 in the final result, and show up at the top of the transcription
-		// Do we need to throw an error instead?
+		// TODO: This will show up as -1 in the final result, and show up at the top
+		// of the transcription instead of somewhat inline like it _could_ have been.
+		// Do we need to throw an error instead?  If they are _all_ -1, it's fine.
+		// If one is an odd ball, then things look weird.
 		return -1
 	}
 	d := r.Alternatives[0].Words[0].StartTime

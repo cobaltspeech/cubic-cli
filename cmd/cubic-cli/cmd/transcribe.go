@@ -17,7 +17,6 @@ package cmd
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -25,6 +24,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/cobaltspeech/cubic-cli/internal/formatters/results/timeline"
 	cubic "github.com/cobaltspeech/sdk-cubic/grpc/go-cubic"
 	"github.com/cobaltspeech/sdk-cubic/grpc/go-cubic/cubicpb"
 	pbduration "github.com/golang/protobuf/ptypes/duration"
@@ -191,7 +191,9 @@ func transcribe() error {
 
 	wg.Wait()
 
-	fmt.Fprintf(os.Stderr, "There were a total of %d failed files.\n", errCount)
+	if errCount > 0 {
+		fmt.Fprintf(os.Stderr, "-----------\nThere were a total of %d failed files.\n", errCount)
+	}
 	return nil
 }
 
@@ -339,9 +341,11 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 		// Create and send the Streaming Recognize config
 		err = client.StreamingRecognize(context.Background(),
 			&cubicpb.RecognitionConfig{
-				ModelId:       model,
-				AudioEncoding: cubicpb.RecognitionConfig_WAV,
-				IdleTimeout:   &pbduration.Duration{Seconds: 30},
+				ModelId:               model,
+				AudioEncoding:         cubicpb.RecognitionConfig_WAV,
+				EnableWordTimeOffsets: true,
+				EnableRawTranscript:   true,
+				IdleTimeout:           &pbduration.Duration{Seconds: 30},
 			},
 			audio, // The file to send
 			func(response *cubicpb.RecognitionResponse) { // The callback for results
@@ -363,16 +367,21 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 }
 
 func processResults(outputWriter io.Writer, resultsChannel <-chan outputs) {
+	// Keep a list of all non-partial results.  Cache them until all results have been recieved.
+	finalResults := make(map[string][]*cubicpb.RecognitionResult)
+
+	// Append every non-partial result to list.  Continues reading until the channel is closed.
 	for result := range resultsChannel {
 		for _, resp := range result.response {
 			if !resp.IsPartial {
-				if str, err := json.Marshal(resp); err != nil {
-					fmt.Fprintf(os.Stderr, "[Error serializing]: %s_Segment%d\t%v\n", result.uttID, result.segment, err)
-				} else {
-					fmt.Fprintf(outputWriter, "%s_%d\t%s\n", result.uttID, result.segment, str)
-				}
+				finalResults[result.uttID] = append(finalResults[result.uttID], resp)
 			}
 		}
+	}
+
+	// Write formatted results to the outputWritter
+	for uttID, results := range finalResults {
+		fmt.Fprintf(os.Stdout, "Timeline for '%s':\n%s\n\n", uttID, timeline.Format(results))
 	}
 
 	if resultsFile != "-" {

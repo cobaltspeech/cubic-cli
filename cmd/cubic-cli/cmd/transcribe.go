@@ -17,10 +17,12 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -47,26 +49,30 @@ var model string
 var inputFile string
 var listFile bool
 var resultsFile string
+var outputFormat string
 var nConcurrentRequests int
 
 // Initialize flags.
 func init() {
 	transcribeCmd.PersistentFlags().StringVarP(&model, "model", "m", "1",
 		"Selects which model ID to use for transcribing.\n"+
-			"Must match a model listed from 'models' subcommand.")
+			"Must match a model listed from \"models\" subcommand.")
 
 	transcribeCmd.Flags().BoolVarP(&listFile, "list-file", "l", false,
 		"When true, the FILE_PATH is pointing to a file containing a list of \n"+
-			"'UtteranceID \\t path/to/audio.wav', one entry per line.")
+			"\"UtteranceID \\t path/to/audio.wav\", one entry per line.")
 
 	transcribeCmd.Flags().StringVarP(&resultsFile, "outputFile", "o", "-",
-		"File to send output to.  '-' indicates stdout.")
+		"File to send output to.  \"-\" indicates stdout.")
+
+	transcribeCmd.Flags().StringVarP(&outputFormat, "outputFormat", "f", "timeline",
+		"Format of output.  Can be [json,utterance-json,json-pretty,timeline].")
 
 	transcribeCmd.Flags().IntVarP(&nConcurrentRequests, "workers", "n", 1,
 		"Number of concurrent requests to send to cubicsvr.\n"+
 			"Please note, while this value is defined client-side the performance \n"+
 			"will be limited by the available computational ability of the server.  \n"+
-			"If you are the only connection to an 8-core server, then '-n 8' is a \n"+
+			"If you are the only connection to an 8-core server, then \"-n 8\" is a \n"+
 			"reasonable value.  A lower number is suggested if there are multiple \n"+
 			"clients connecting to the same machine.")
 }
@@ -83,7 +89,7 @@ In single file mode:
 
 In list file mode:
     The FILE_PATH should point to a a file listing multiple audio files
-    with the format 'Utterance_ID \t FILE_PATH \n'.
+    with the format "Utterance_ID \t FILE_PATH \n".
     Each entry should be on its own line.
     Utterance_IDs may not contain whitespace.
 
@@ -93,7 +99,13 @@ Audio files in the following formats are supported:
 The file extension (wav, flac, mp3, vox, raw) will be used to determine which
  codec to use.  Use WAV or FLAC for best results.
 
-See 'transcribe --help' for details on the other flags.`
+Summary of "--outputFormat" options:
+    * json           - json of map[uttID][]Results.
+    * json-pretty    - json of map[uttID][]Results, prettified with newlines and indents.
+    * utterance-json - "UttID_SegID \t json of a single Result", grouped by UttID.
+    * timeline       - "start_time|channel_id|1best transcript", grouped by UttID.
+
+See "transcribe --help" for details on the other flags.`
 
 // Cmd is the command wrapping sub commands used to run audio file(s) through cubicsvr.
 var transcribeCmd = &cobra.Command{
@@ -127,6 +139,16 @@ var transcribeCmd = &cobra.Command{
 				// That would indicate it is safe to procced with the program as normal
 				return fmt.Errorf("Error while checking for existing --outputFile: %v", err)
 			}
+		}
+
+		// Make sure outputFormat is a valid option.
+		switch outputFormat {
+		case "json": // Do nothing
+		case "utterance-json": // Do nothing
+		case "json-pretty": // Do nothing
+		case "timeline": // Do nothing
+		default:
+			return fmt.Errorf("invalid option for outputFormat: '%v'", outputFormat)
 		}
 
 		return nil
@@ -404,9 +426,51 @@ func processResults(outputWriter io.Writer, resultsChannel <-chan outputs) {
 		}
 	}
 
-	// Write formatted results to the outputWritter
-	for uttID, results := range finalResults {
-		fmt.Fprintf(os.Stdout, "Timeline for '%s':\n%s\n\n", uttID, timeline.Format(results))
+	// Sort the segmentIDs for consistancy between runs.
+	var segmentIDs []string
+	for k := range finalResults {
+		segmentIDs = append(segmentIDs, k)
+	}
+	sort.Slice(segmentIDs, func(i, j int) bool { return segmentIDs[i] < segmentIDs[j] })
+
+	// Write formatted results to the outputWritter.
+	switch outputFormat {
+	case "utterance-json":
+		for _, uttID := range segmentIDs {
+			if results, ok := finalResults[uttID]; !ok {
+				fmt.Fprintf(os.Stdout, "Internal error: invalid uttID '%s'\n", uttID)
+			} else {
+				for nSegment, segment := range results {
+					if str, err := json.Marshal(segment); err != nil {
+						fmt.Fprintf(os.Stderr, "[Error serializing]: %s_Segment%d\t%v\n", uttID, nSegment, err)
+					} else {
+						fmt.Fprintf(outputWriter, "%s_%d\t%s\n", uttID, nSegment, string(str))
+					}
+				}
+			}
+		}
+	case "json":
+		if str, err := json.Marshal(finalResults); err == nil {
+			fmt.Fprint(outputWriter, string(str))
+		} else {
+			fmt.Fprintf(os.Stderr, "Error serializing results: %v\n", err)
+		}
+	case "json-pretty":
+		if str, err := json.MarshalIndent(finalResults, "", "  "); err == nil {
+			fmt.Fprint(outputWriter, string(str))
+		} else {
+			fmt.Fprintf(os.Stderr, "Error serializing results: %v\n", err)
+		}
+	case "timeline":
+		for _, uttID := range segmentIDs {
+			if results, ok := finalResults[uttID]; !ok {
+				fmt.Fprintf(os.Stdout, "Internal error: invalid uttID '%s'\n", uttID)
+			} else {
+				fmt.Fprintf(os.Stdout, "Timeline for '%s':\n%s\n\n", uttID, timeline.Format(results))
+			}
+		}
+	default:
+		fmt.Fprintf(os.Stdout, "Internal error: invalid outputFormat '%s'\n", outputFormat)
 	}
 
 	if resultsFile != "-" {

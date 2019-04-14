@@ -426,22 +426,23 @@ func processResults(outputWriter io.Writer, resultsChannel <-chan outputs) {
 		}
 	}
 
-	// Sort the segmentIDs for consistancy between runs.
-	var segmentIDs []string
+	// Sort the uttIDs for consistancy between runs.
+	var uttIDs []string
 	for k := range finalResults {
-		segmentIDs = append(segmentIDs, k)
+		uttIDs = append(uttIDs, k)
 	}
-	sort.Slice(segmentIDs, func(i, j int) bool { return segmentIDs[i] < segmentIDs[j] })
+	sort.Strings(uttIDs)
 
 	// Write formatted results to the outputWritter.
 	switch outputFormat {
 	case "utterance-json":
-		for _, uttID := range segmentIDs {
-			if results, ok := finalResults[uttID]; !ok {
-				fmt.Fprintf(os.Stdout, "Internal error: invalid uttID '%s'\n", uttID)
+		for _, uttID := range uttIDs {
+			segments, ok := finalResults[uttID]
+			if !ok {
+				fmt.Fprintf(os.Stderr, "Internal error: invalid uttID '%s'\n", uttID)
 			} else {
-				for nSegment, segment := range results {
-					if str, err := json.Marshal(segment); err != nil {
+				for nSegment, result := range segments {
+					if str, err := json.Marshal(result); err != nil {
 						fmt.Fprintf(os.Stderr, "[Error serializing]: %s_Segment%d\t%v\n", uttID, nSegment, err)
 					} else {
 						fmt.Fprintf(outputWriter, "%s_%d\t%s\n", uttID, nSegment, string(str))
@@ -462,15 +463,15 @@ func processResults(outputWriter io.Writer, resultsChannel <-chan outputs) {
 			fmt.Fprintf(os.Stderr, "Error serializing results: %v\n", err)
 		}
 	case "timeline":
-		for _, uttID := range segmentIDs {
+		for _, uttID := range uttIDs {
 			if results, ok := finalResults[uttID]; !ok {
-				fmt.Fprintf(os.Stdout, "Internal error: invalid uttID '%s'\n", uttID)
+				fmt.Fprintf(os.Stderr, "Internal error: invalid uttID '%s'\n", uttID)
 			} else {
-				fmt.Fprintf(os.Stdout, "Timeline for '%s':\n%s\n\n", uttID, timeline.Format(results))
+				fmt.Fprintf(outputWriter, "Timeline for '%s':\n%s\n\n", uttID, timeline.Format(results))
 			}
 		}
 	default:
-		fmt.Fprintf(os.Stdout, "Internal error: invalid outputFormat '%s'\n", outputFormat)
+		fmt.Fprintf(os.Stderr, "Internal error: invalid outputFormat '%s'\n", outputFormat)
 	}
 
 	if resultsFile != "-" {

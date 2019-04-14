@@ -51,6 +51,7 @@ var listFile bool
 var resultsFile string
 var outputFormat string
 var nConcurrentRequests int
+var audioChannels []int
 
 // Initialize flags.
 func init() {
@@ -67,6 +68,10 @@ func init() {
 
 	transcribeCmd.Flags().StringVarP(&outputFormat, "outputFormat", "f", "timeline",
 		"Format of output.  Can be [json,utterance-json,json-pretty,timeline].")
+
+	transcribeCmd.Flags().IntSliceVarP(&audioChannels, "audioChannels", "c", []int{0},
+		"Audio channels to transcribe.  \"0\" for mono, \"0,1\" for stereo, \n"+
+			"  \"0,2\" for first and third channels, etc.")
 
 	transcribeCmd.Flags().IntVarP(&nConcurrentRequests, "workers", "n", 1,
 		"Number of concurrent requests to send to cubicsvr.\n"+
@@ -385,6 +390,12 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 		verbosePrintf(os.Stdout, "Worker%2d streaming Utterance '%s' (file '%s').\n",
 			workerID, input.uttID, input.filepath)
 
+		//Convert audioChannel from int to uint32
+		var audioChannelsUint32 []uint32
+		for _, c := range audioChannels {
+			audioChannelsUint32 = append(audioChannelsUint32, uint32(c))
+		}
+
 		// Create and send the Streaming Recognize config
 		err = client.StreamingRecognize(context.Background(),
 			&cubicpb.RecognitionConfig{
@@ -393,6 +404,7 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 				EnableWordTimeOffsets: true,
 				EnableRawTranscript:   true,
 				IdleTimeout:           &pbduration.Duration{Seconds: 30},
+				AudioChannels:         audioChannelsUint32,
 			},
 			audio, // The file to send
 			func(response *cubicpb.RecognitionResponse) { // The callback for results

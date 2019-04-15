@@ -42,23 +42,34 @@ at `localhost:2727`.
 # Transcribe the single file this_is_a_test-en_us-16.wav.
 ## Should result in the transcription of "this is a test"
 ./bin/cubic-cli --insecure --server localhost:2727 \
-	transcribe ./testdata/this_is_a_test-en_us-16.wav
+    transcribe ./testdata/this_is_a_test-en_us-16.wav
 
 # Transcribe the list of files defined at ./testdata/list.txt
 ## Should result in the transcription of "this is a test" and "the second test" printed to stdout
 ./bin/cubic-cli --insecure --server localhost:2727 \
-	transcribe --list-file ./testdata/list.txt
+    transcribe --list-file ./testdata/list.txt
 
 # Same as the previous `transcribe` command, but redirects the results to the --outputFile.
 ./bin/cubic-cli --insecure --server localhost:2727 \
-	transcribe --list-file ./testdata/list.txt \
-	--outputFile ./testdata/out.txt
+    transcribe --list-file ./testdata/list.txt \
+    --outputFile ./testdata/out.txt
 
 # Same as the first `transcribe` command, but sends up to two files at a time.
 ## Note that the server may place a limit to the maximum number of concurrent requests processed.
 ./bin/cubic-cli --insecure --server localhost:2727 \
-	transcribe --list-file ./testdata/list.txt \
+    transcribe --list-file ./testdata/list.txt \
     --workers 2
+
+# Transcribe multiple channels. Note: this is the same as '--stereo'
+./bin/cubic-cli --insecure --server localhost:2727 \
+    transcribe ./testdata/this_is_a_test-en_us-16.wav \
+    --audioChannels 0,1
+
+# Select different output formats.  --outputFormat json allows you to easily 
+# pipe the results to another program.
+./bin/cubic-cli --insecure --server localhost:2727 \
+    transcribe ./testdata/this_is_a_test-en_us-16.wav \
+    --outputFormat json
 ```
 
 For quick testing, Cobalt's demo server can be accessed with `--server

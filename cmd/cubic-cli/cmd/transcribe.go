@@ -71,8 +71,10 @@ func init() {
 		"Format of output.  Can be [json,utterance-json,json-pretty,timeline].")
 
 	transcribeCmd.Flags().IntSliceVarP(&audioChannels, "audioChannels", "c", []int{},
-		"Audio channels to transcribe.  \"0\" for mono, \"0,1\" for stereo, \n"+
-			"  \"0,2\" for first and third channels, etc.\n"+
+		"Audio channels to transcribe.  Defaults to mono.\n"+
+			"  \"0\" for mono\n"+
+			"  \"0,1\" for stereo\n"+
+			"  \"0,2\" for first and third channels\n"+
 			"Overrides --stereo if both are included.")
 
 	transcribeCmd.Flags().BoolVar(&audioChannelsStereo, "stereo", false,
@@ -163,8 +165,7 @@ var transcribeCmd = &cobra.Command{
 		}
 
 		// Set up audioChannels
-		if len(audioChannels) == 0 {
-			audioChannels = []int{0} // Default to mono
+		if len(audioChannels) == 0 { // Wasn't set
 			if audioChannelsStereo {
 				audioChannels = []int{0, 1} // Set to stereo
 			}

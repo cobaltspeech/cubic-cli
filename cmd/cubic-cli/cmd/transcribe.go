@@ -51,6 +51,8 @@ var listFile bool
 var resultsFile string
 var outputFormat string
 var nConcurrentRequests int
+var audioChannels []int
+var audioChannelsStereo bool
 
 // Initialize flags.
 func init() {
@@ -67,6 +69,17 @@ func init() {
 
 	transcribeCmd.Flags().StringVarP(&outputFormat, "outputFormat", "f", "timeline",
 		"Format of output.  Can be [json,utterance-json,json-pretty,timeline].")
+
+	transcribeCmd.Flags().IntSliceVarP(&audioChannels, "audioChannels", "c", []int{},
+		"Audio channels to transcribe.  Defaults to mono.\n"+
+			"  \"0\" for mono\n"+
+			"  \"0,1\" for stereo\n"+
+			"  \"0,2\" for first and third channels\n"+
+			"Overrides --stereo if both are included.")
+
+	transcribeCmd.Flags().BoolVar(&audioChannelsStereo, "stereo", false,
+		"Sets --audioChannels \"0,1\" which transcribes both audio channels of a stereo file.\n"+
+			"If --audioChannels is set, this flag is ignored.")
 
 	transcribeCmd.Flags().IntVarP(&nConcurrentRequests, "workers", "n", 1,
 		"Number of concurrent requests to send to cubicsvr.\n"+
@@ -149,6 +162,13 @@ var transcribeCmd = &cobra.Command{
 		case "timeline": // Do nothing
 		default:
 			return fmt.Errorf("invalid option for outputFormat: '%v'", outputFormat)
+		}
+
+		// Set up audioChannels
+		if len(audioChannels) == 0 { // Wasn't set
+			if audioChannelsStereo {
+				audioChannels = []int{0, 1} // Set to stereo
+			}
 		}
 
 		return nil
@@ -385,6 +405,12 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 		verbosePrintf(os.Stdout, "Worker%2d streaming Utterance '%s' (file '%s').\n",
 			workerID, input.uttID, input.filepath)
 
+		//Convert audioChannel from int to uint32
+		var audioChannelsUint32 []uint32
+		for _, c := range audioChannels {
+			audioChannelsUint32 = append(audioChannelsUint32, uint32(c))
+		}
+
 		// Create and send the Streaming Recognize config
 		err = client.StreamingRecognize(context.Background(),
 			&cubicpb.RecognitionConfig{
@@ -393,6 +419,7 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 				EnableWordTimeOffsets: true,
 				EnableRawTranscript:   true,
 				IdleTimeout:           &pbduration.Duration{Seconds: 30},
+				AudioChannels:         audioChannelsUint32,
 			},
 			audio, // The file to send
 			func(response *cubicpb.RecognitionResponse) { // The callback for results

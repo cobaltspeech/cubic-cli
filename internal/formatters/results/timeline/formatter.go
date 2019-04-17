@@ -13,9 +13,9 @@ import (
 
 // Alternative is a subset of the fields in cubicpb.RecognitionAlternative
 type Alternative struct {
-	StartTime  int
-	Confidence int
-	Transcript string
+	StartTime  int     `json:"start_time"`
+	Confidence float64 `json:"confidence"`
+	Transcript string  `json:"transcript"`
 }
 
 // Result encapsulates the Alternatives for a specific endpointed utterance
@@ -50,7 +50,7 @@ func Format(results []*cubicpb.RecognitionResult) string {
 
 			entry.Nbest = append(entry.Nbest, Alternative{
 				StartTime:  durToMs(alternative.StartTime),
-				Confidence: int(alternative.Confidence * 1000),
+				Confidence: alternative.Confidence,
 				Transcript: alternative.Transcript,
 			})
 		}

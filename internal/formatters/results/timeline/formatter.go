@@ -3,54 +3,58 @@
 package timeline
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/cobaltspeech/sdk-cubic/grpc/go-cubic/cubicpb"
+	"github.com/golang/protobuf/ptypes/duration"
 )
 
-// Format generates a list of formatted utterances.
-// The format of each utterance is "start_time_ms|audio_channel_id|1-best transcript".
-//
-// Some assumptions:
-// * The config used in the original transcribe request included, so that timestamps will be available:
-//   &cubicpb.RecognitionConfig{
-//     EnableWordTimeOffsets: true,
-//     EnableRawTranscript: true
-//   }
+// Alternative is a subset of the fields in cubicpb.RecognitionAlternative
+type Alternative struct {
+	StartTime  int
+	Confidence int
+	Transcript string
+}
+
+// Result encapsulates the Alternatives for a specific endpointed utterance
+type Result struct {
+	ChannelID int
+	Nbest     []Alternative
+}
+
+// Format generates a list of formatted utterances sorted by StartTime, smallest to largest.
 //
 // Some Promises:
-// * The list will be sorted by starttime, smallest to largets.
-// * No spaces will be present until after the second pipe ('|')
-// * If the startTime in milliseconds is the same value, the order in which transcripts are.
-// * If there is no value in the results.Alternatives[0].Words[0].StartTime, a time of -1 will be assumed.
+// * The list will be sorted by starttime, smallest to largest.
+// * If the startTime in milliseconds of two results are the same, they will be returned in the order the recognizer emitted them.
 func Format(results []*cubicpb.RecognitionResult) string {
-	// Intermediate representation
-	type utterance struct {
-		startTime  int
-		channelID  int
-		transcript string
-	}
 
 	// Populate list of Intermediate representation objects
-	var entries []utterance
-	for _, result := range results {
-		if result.IsPartial {
+	var entries []Result
+	for _, r := range results {
+		if r.IsPartial {
 			continue
 		}
 
 		// Sometimes, there are entries that have an empty transcript as the most confident result, but may have other
 		// transcripts at lower confidences.  For the purpose of the timeline, we prune those out.
-		if hasEmptyTranscript(result) {
+		if hasEmptyTranscript(r) {
 			continue
 		}
+		entry := Result{
+			ChannelID: int(r.AudioChannel),
+		}
+		for _, alternative := range r.GetAlternatives() {
 
-		entries = append(entries, utterance{
-			startTime:  startTime(result),
-			channelID:  int(result.AudioChannel),
-			transcript: result.Alternatives[0].Transcript,
-		})
+			entry.Nbest = append(entry.Nbest, Alternative{
+				StartTime:  durToMs(alternative.StartTime),
+				Confidence: int(alternative.Confidence * 1000),
+				Transcript: alternative.Transcript,
+			})
+		}
+		entries = append(entries, entry)
 	}
 
 	// Sort by startTime (results.Alternatives[0].Words[0].StartTime)
@@ -64,28 +68,21 @@ func Format(results []*cubicpb.RecognitionResult) string {
 		// then they won't get timestamps, meaning start times are _all_ -1.
 		// If that's the case, we can just maintain the same order they came in.
 		// To do that, this function should return false.  `t1 < t2` still matches that pattern.
-		return entries[i].startTime < entries[j].startTime
+		return entries[i].Nbest[0].StartTime < entries[j].Nbest[0].StartTime
 	})
 
-	// Convert each entry to the formatted string.
-	var arr []string
-	for _, e := range entries {
-		arr = append(arr, fmt.Sprintf("%d|%d|%s", e.startTime, e.channelID, e.transcript))
+	str, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		return fmt.Sprintf("Error serializing results: %v\n", err)
 	}
 
-	return strings.Join(arr, "\n")
+	return string(str)
 }
 
-// Returns the start time in ms of the given RecognitionResult
-func startTime(r *cubicpb.RecognitionResult) int {
-	if len(r.Alternatives) == 0 || len(r.Alternatives[0].Words) == 0 {
-		// TODO: This will show up as -1 in the final result, and show up at the top
-		// of the transcription instead of somewhat inline like it _could_ have been.
-		// Do we need to throw an error instead?  If they are _all_ -1, it's fine.
-		// If one is an odd ball, then things look weird.
+func durToMs(d *duration.Duration) int {
+	if d == nil {
 		return -1
 	}
-	d := r.Alternatives[0].Words[0].StartTime
 	return int(d.Seconds*1000) + int(d.Nanos/1000/1000)
 }
 

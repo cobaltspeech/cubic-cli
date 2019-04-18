@@ -15,57 +15,126 @@
 package timeline
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/cobaltspeech/sdk-cubic/grpc/go-cubic/cubicpb"
+	"github.com/golang/protobuf/ptypes/duration"
 )
 
-// Format generates a list of formatted utterances.
-// The format of each utterance is "start_time_ms|audio_channel_id|1-best transcript".
-//
-// Some assumptions:
-// * The config used in the original transcribe request included, so that timestamps will be available:
-//   &cubicpb.RecognitionConfig{
-//     EnableWordTimeOffsets: true,
-//     EnableRawTranscript: true
-//   }
-//
-// Some Promises:
-// * The list will be sorted by starttime, smallest to largets.
-// * No spaces will be present until after the second pipe ('|')
-// * If the startTime in milliseconds is the same value, the order in which transcripts are.
-// * If there is no value in the results.Alternatives[0].Words[0].StartTime, a time of -1 will be assumed.
-func Format(results []*cubicpb.RecognitionResult) string {
-	// Intermediate representation
-	type utterance struct {
-		startTime  int
-		channelID  int
-		transcript string
+// Alternative is a subset of the fields in cubicpb.RecognitionAlternative
+type Alternative struct {
+	StartTime  int64               `json:"start_time"`
+	Confidence float64             `json:"confidence"`
+	Transcript string              `json:"transcript"`
+	Words      []*cubicpb.WordInfo `json:"-"`
+}
+
+// MarshalJSON hides the unfriendly JSON output for duration.Duration
+// The pattern of aliasing the type we want to shadow is from the
+// blog post http://choly.ca/post/go-json-marshalling/
+func (a *Alternative) MarshalJSON() ([]byte, error) {
+	// create aliases so we have all the same fields but none of the methods and don't inherit the original type's MarshalJSON
+	type Alias Alternative
+	type WordAlias cubicpb.WordInfo
+	type W struct {
+		StartTime int64 `json:"start_time"`
+		Duration  int64 `json:"duration"`
+		*WordAlias
+	}
+	out := &struct {
+		Words []*W `json:"words,omitempty"`
+		*Alias
+	}{
+		Alias: (*Alias)(a),
 	}
 
+	for _, word := range a.Words {
+		out.Words = append(out.Words, &W{
+			StartTime: durToMs(word.StartTime),
+			Duration:  durToMs(word.Duration),
+			WordAlias: (*WordAlias)(word),
+		})
+	}
+	return json.Marshal(out)
+}
+
+// Result encapsulates the Alternatives for a specific endpointed utterance
+type Result struct {
+	ChannelID int           `json:"channel_id"`
+	Nbest     []Alternative `json:"nbest"`
+}
+
+// ResultFormatter formats a slice of RecognitionResults, e.g. an entire file's worth
+type ResultFormatter interface {
+	Format(results []*cubicpb.RecognitionResult) (string, error)
+}
+
+// Config holds the various options that can be used for this Formatter.
+type Config struct {
+	MaxAlternatives int
+}
+
+// CreateFormatter returns a new Formatter instance with the given configurations
+func (cfg Config) CreateFormatter() (ResultFormatter, error) {
+	if err := verifyCfg(cfg); err != nil {
+		return nil, err
+	}
+	return Formatter{Cfg: cfg}, nil
+}
+
+func verifyCfg(cfg Config) error {
+	if cfg.MaxAlternatives < 1 {
+		return fmt.Errorf("Number of alternatives must be 1 or more")
+	}
+
+	return nil
+}
+
+// Formatter can be configured to limit the number of alternatives for each result
+type Formatter struct {
+	Cfg Config
+}
+
+// Format generates a list of formatted utterances sorted by StartTime, smallest to largest.
+//
+// Some Promises:
+// * The list will be sorted by starttime, smallest to largest.
+// * If the startTime in milliseconds of two results are the same, they will be returned in the order the recognizer emitted them.
+func (f Formatter) Format(results []*cubicpb.RecognitionResult) (string, error) {
+
 	// Populate list of Intermediate representation objects
-	var entries []utterance
-	for _, result := range results {
-		if result.IsPartial {
+	var entries []Result
+	for _, r := range results {
+		if r.IsPartial {
 			continue
 		}
 
 		// Sometimes, there are entries that have an empty transcript as the most confident result, but may have other
 		// transcripts at lower confidences.  For the purpose of the timeline, we prune those out.
-		if hasEmptyTranscript(result) {
+		if hasEmptyTranscript(r) {
 			continue
 		}
+		entry := Result{
+			ChannelID: int(r.AudioChannel),
+		}
+		for i, alternative := range r.GetAlternatives() {
+			if i >= f.Cfg.MaxAlternatives {
+				break
+			}
 
-		entries = append(entries, utterance{
-			startTime:  startTime(result),
-			channelID:  int(result.AudioChannel),
-			transcript: result.Alternatives[0].Transcript,
-		})
+			entry.Nbest = append(entry.Nbest, Alternative{
+				StartTime:  durToMs(alternative.StartTime),
+				Confidence: alternative.Confidence,
+				Transcript: alternative.Transcript,
+				Words:      alternative.Words,
+			})
+		}
+		entries = append(entries, entry)
 	}
 
-	// Sort by startTime (results.Alternatives[0].Words[0].StartTime)
+	// Sort by startTime (results.Alternatives[0].StartTime)
 	// If start times are the same, maintain the original order.
 	//
 	// While CubicSvr guarentees that the of results entries are order
@@ -76,29 +145,22 @@ func Format(results []*cubicpb.RecognitionResult) string {
 		// then they won't get timestamps, meaning start times are _all_ -1.
 		// If that's the case, we can just maintain the same order they came in.
 		// To do that, this function should return false.  `t1 < t2` still matches that pattern.
-		return entries[i].startTime < entries[j].startTime
+		return entries[i].Nbest[0].StartTime < entries[j].Nbest[0].StartTime
 	})
 
-	// Convert each entry to the formatted string.
-	var arr []string
-	for _, e := range entries {
-		arr = append(arr, fmt.Sprintf("%d|%d|%s", e.startTime, e.channelID, e.transcript))
+	str, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("error serializing results: %v", err)
 	}
 
-	return strings.Join(arr, "\n")
+	return string(str), nil
 }
 
-// Returns the start time in ms of the given RecognitionResult
-func startTime(r *cubicpb.RecognitionResult) int {
-	if len(r.Alternatives) == 0 || len(r.Alternatives[0].Words) == 0 {
-		// TODO: This will show up as -1 in the final result, and show up at the top
-		// of the transcription instead of somewhat inline like it _could_ have been.
-		// Do we need to throw an error instead?  If they are _all_ -1, it's fine.
-		// If one is an odd ball, then things look weird.
+func durToMs(d *duration.Duration) int64 {
+	if d == nil {
 		return -1
 	}
-	d := r.Alternatives[0].Words[0].StartTime
-	return int(d.Seconds*1000) + int(d.Nanos/1000/1000)
+	return int64(d.Seconds*1000) + int64(d.Nanos/1000/1000)
 }
 
 func hasEmptyTranscript(r *cubicpb.RecognitionResult) bool {

@@ -53,6 +53,7 @@ var outputFormat string
 var nConcurrentRequests int
 var audioChannels []int
 var audioChannelsStereo bool
+var maxAlternatives int
 
 // Initialize flags.
 func init() {
@@ -88,6 +89,9 @@ func init() {
 			"If you are the only connection to an 8-core server, then \"-n 8\" is a \n"+
 			"reasonable value.  A lower number is suggested if there are multiple \n"+
 			"clients connecting to the same machine.")
+
+	transcribeCmd.Flags().IntVarP(&maxAlternatives, "fmt.timeline.maxAlts", "a", 1,
+		"Maximum number of alternatives to provide for each result, if the outputFormat includes alternatives (such as 'timeline').")
 }
 
 var longMsg = `
@@ -411,16 +415,24 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 			audioChannelsUint32 = append(audioChannelsUint32, uint32(c))
 		}
 
+		cfg := &cubicpb.RecognitionConfig{
+			ModelId:       model,
+			AudioEncoding: audioEncoding,
+			IdleTimeout:   &pbduration.Duration{Seconds: 30},
+			AudioChannels: audioChannelsUint32,
+		}
+
+		if outputFormat == "timeline" {
+			cfg.EnableWordConfidence = true
+			cfg.EnableWordTimeOffsets = true
+
+			//TODO(julie) Once we've updated cubicsvr so it can output formatted transcript and word-level features, remove this line
+			cfg.EnableRawTranscript = true
+		}
+
 		// Create and send the Streaming Recognize config
 		err = client.StreamingRecognize(context.Background(),
-			&cubicpb.RecognitionConfig{
-				ModelId:               model,
-				AudioEncoding:         audioEncoding,
-				EnableWordTimeOffsets: true,
-				EnableRawTranscript:   true,
-				IdleTimeout:           &pbduration.Duration{Seconds: 30},
-				AudioChannels:         audioChannelsUint32,
-			},
+			cfg,
 			audio, // The file to send
 			func(response *cubicpb.RecognitionResponse) { // The callback for results
 				verbosePrintf(os.Stdout, "Worker%2d recieved result segment #%d for Utterance '%s'.\n", workerID, segmentID, input.uttID)
@@ -490,11 +502,22 @@ func processResults(outputWriter io.Writer, resultsChannel <-chan outputs) {
 			fmt.Fprintf(os.Stderr, "Error serializing results: %v\n", err)
 		}
 	case "timeline":
+		cfg := timeline.Config{MaxAlternatives: maxAlternatives}
+		formatter, err := cfg.CreateFormatter()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Internal error creating timeline formatter: %v", err)
+			return
+		}
 		for _, uttID := range uttIDs {
 			if results, ok := finalResults[uttID]; !ok {
 				fmt.Fprintf(os.Stderr, "Internal error: invalid uttID '%s'\n", uttID)
 			} else {
-				fmt.Fprintf(outputWriter, "Timeline for '%s':\n%s\n\n", uttID, timeline.Format(results))
+				output, err := formatter.Format(results)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Formatting results: %v", err)
+					return
+				}
+				fmt.Fprintf(outputWriter, "Timeline for '%s':\n%s\n\n", uttID, output)
 			}
 		}
 	default:

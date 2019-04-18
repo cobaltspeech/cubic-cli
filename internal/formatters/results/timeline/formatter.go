@@ -24,12 +24,44 @@ type Result struct {
 	Nbest     []Alternative
 }
 
+// ResultFormatter formats a slice of RecognitionResults, e.g. an entire file's worth
+type ResultFormatter interface {
+	Format(results []*cubicpb.RecognitionResult) (string, error)
+}
+
+// Config holds the various options that can be used for this Formatter.
+type Config struct {
+	MaxAlternatives int
+}
+
+// CreateFormatter returns a new Formatter instance with the given configurations
+func (cfg Config) CreateFormatter() (ResultFormatter, error) {
+	if err := verifyCfg(cfg); err != nil {
+		return nil, err
+	}
+	return Formatter{Cfg: cfg}, nil
+}
+
+func verifyCfg(cfg Config) error {
+
+	if cfg.MaxAlternatives < 1 {
+		return fmt.Errorf("Number of alternatives must be 1 or more")
+	}
+
+	return nil
+}
+
+// Formatter can be configured to limit the number of alternatives for each result
+type Formatter struct {
+	Cfg Config
+}
+
 // Format generates a list of formatted utterances sorted by StartTime, smallest to largest.
 //
 // Some Promises:
 // * The list will be sorted by starttime, smallest to largest.
 // * If the startTime in milliseconds of two results are the same, they will be returned in the order the recognizer emitted them.
-func Format(results []*cubicpb.RecognitionResult) string {
+func (f Formatter) Format(results []*cubicpb.RecognitionResult) (string, error) {
 
 	// Populate list of Intermediate representation objects
 	var entries []Result
@@ -46,7 +78,10 @@ func Format(results []*cubicpb.RecognitionResult) string {
 		entry := Result{
 			ChannelID: int(r.AudioChannel),
 		}
-		for _, alternative := range r.GetAlternatives() {
+		for i, alternative := range r.GetAlternatives() {
+			if i >= f.Cfg.MaxAlternatives {
+				break
+			}
 
 			entry.Nbest = append(entry.Nbest, Alternative{
 				StartTime:  durToMs(alternative.StartTime),
@@ -73,10 +108,10 @@ func Format(results []*cubicpb.RecognitionResult) string {
 
 	str, err := json.MarshalIndent(entries, "", "  ")
 	if err != nil {
-		return fmt.Sprintf("Error serializing results: %v\n", err)
+		return "", fmt.Errorf("error serializing results: %v", err)
 	}
 
-	return string(str)
+	return string(str), nil
 }
 
 func durToMs(d *duration.Duration) int {

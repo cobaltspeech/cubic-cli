@@ -53,6 +53,7 @@ var outputFormat string
 var nConcurrentRequests int
 var audioChannels []int
 var audioChannelsStereo bool
+var maxAlternatives int
 
 // Initialize flags.
 func init() {
@@ -88,6 +89,9 @@ func init() {
 			"If you are the only connection to an 8-core server, then \"-n 8\" is a \n"+
 			"reasonable value.  A lower number is suggested if there are multiple \n"+
 			"clients connecting to the same machine.")
+
+	transcribeCmd.Flags().IntVarP(&maxAlternatives, "maxAlts", "a", 1,
+		"Maximum number of alternatives to provide for each result, if the outputFormat includes alternatives (such as 'timeline').")
 }
 
 var longMsg = `
@@ -488,11 +492,22 @@ func processResults(outputWriter io.Writer, resultsChannel <-chan outputs) {
 			fmt.Fprintf(os.Stderr, "Error serializing results: %v\n", err)
 		}
 	case "timeline":
+		cfg := timeline.Config{MaxAlternatives: maxAlternatives}
+		formatter, err := cfg.CreateFormatter()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Internal error creating timeline formatter: %v", err)
+			return
+		}
 		for _, uttID := range uttIDs {
 			if results, ok := finalResults[uttID]; !ok {
 				fmt.Fprintf(os.Stderr, "Internal error: invalid uttID '%s'\n", uttID)
 			} else {
-				fmt.Fprintf(outputWriter, "Timeline for '%s':\n%s\n\n", uttID, timeline.Format(results))
+				output, err := formatter.Format(results)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Formatting results: %v", err)
+					return
+				}
+				fmt.Fprintf(outputWriter, "Timeline for '%s':\n%s\n\n", uttID, output)
 			}
 		}
 	default:

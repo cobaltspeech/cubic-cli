@@ -3,6 +3,8 @@
 package timeline_test
 
 import (
+	"encoding/json"
+	"reflect"
 	"testing"
 
 	"github.com/cobaltspeech/cubic-cli/internal/formatters/results/timeline"
@@ -24,14 +26,84 @@ func TestExxonFormatter_Order(t *testing.T) {
 		newResult("", 1500, 0, false),                    // Shouldn't show up with an empty transcript.
 	}
 
-	want := "500|0|One0\n500|1|One1\n500|0|One0.1\n750|1|Two\n7500|0|Three"
+	wantStr := `[
+		{
+		  "ChannelID": 0,
+		  "Nbest": [
+			{
+			  "start_time": 500,
+			  "confidence": 0.6,
+			  "transcript": "One0"
+			}
+		  ]
+		},
+		{
+		  "ChannelID": 1,
+		  "Nbest": [
+			{
+			  "start_time": 500,
+			  "confidence": 0.6,
+			  "transcript": "One1"
+			}
+		  ]
+		},
+		{
+		  "ChannelID": 0,
+		  "Nbest": [
+			{
+			  "start_time": 500,
+			  "confidence": 0.6,
+			  "transcript": "One0.1"
+			}
+		  ]
+		},
+		{
+		  "ChannelID": 1,
+		  "Nbest": [
+			{
+			  "start_time": 750,
+			  "confidence": 0.6,
+			  "transcript": "Two"
+			}
+		  ]
+		},
+		{
+		  "ChannelID": 0,
+		  "Nbest": [
+			{
+			  "start_time": 7500,
+			  "confidence": 0.6,
+			  "transcript": "Three"
+			}
+		  ]
+		}
+	]`
+	var want []timeline.Result
+	json.Unmarshal([]byte(wantStr), &want)
+
+	cfg := timeline.Config{
+		MaxAlternatives: 1,
+	}
+
+	formatter, err := cfg.CreateFormatter()
+	if err != nil {
+		t.Errorf("Unexpected error creating formatter %s", err)
+	}
 
 	// Format the test RecognitionResult.
-	got := timeline.Format(input)
+	str, err := formatter.Format(input)
+	if err != nil {
+		t.Errorf("Unexpected error calling Format %s", err)
+	}
+
+	var got []timeline.Result
+	if err := json.Unmarshal([]byte(str), &got); err != nil {
+		t.Errorf("Error unmarshalling formatted result: %s", err)
+	}
 
 	// Test for either of the two possible answers.
-	if got != want {
-		t.Errorf("Unexpected format recieved.\nGot:\n%s\n\nWant:\n\t%s\n\n", got, want)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Unexpected output.\nGot:\n%v\n\nWant:\n%v\n\n", got, want)
 	}
 }
 
@@ -43,8 +115,15 @@ func newResult(transcript string, startTime int, channelId int, partial bool) *c
 		AudioChannel: uint32(channelId),
 		IsPartial:    partial,
 		Alternatives: []*cubicpb.RecognitionAlternative{&cubicpb.RecognitionAlternative{
+			Confidence: 0.6,
 			Transcript: transcript,
+			StartTime: &duration.Duration{
+				Seconds: int64(startTime / 1000),
+				Nanos:   int32((startTime % 1000) * 1000000),
+			},
 			Words: []*cubicpb.WordInfo{&cubicpb.WordInfo{
+				Word:       transcript,
+				Confidence: 0.6,
 				StartTime: &duration.Duration{
 					Seconds: int64(startTime / 1000),
 					Nanos:   int32((startTime % 1000) * 1000000),

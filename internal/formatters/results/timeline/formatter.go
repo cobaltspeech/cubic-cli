@@ -13,15 +13,44 @@ import (
 
 // Alternative is a subset of the fields in cubicpb.RecognitionAlternative
 type Alternative struct {
-	StartTime  int     `json:"start_time"`
-	Confidence float64 `json:"confidence"`
-	Transcript string  `json:"transcript"`
+	StartTime  int64               `json:"start_time"`
+	Confidence float64             `json:"confidence"`
+	Transcript string              `json:"transcript"`
+	Words      []*cubicpb.WordInfo `json:"-"`
+}
+
+// MarshalJSON hides the unfriendly JSON output for duration.Duration
+func (a *Alternative) MarshalJSON() ([]byte, error) {
+	// create aliases so we have all the same fields but none of the methods and don't inherit the original type's MarshalJSON
+	type Alias Alternative
+	type WordAlias cubicpb.WordInfo
+	type W struct {
+		StartTime int64 `json:"start_time"`
+		Duration  int64 `json:"duration"`
+		*WordAlias
+	}
+	out := &struct {
+		Words []*W `json:"words,omitempty"`
+		*Alias
+	}{
+		Alias: (*Alias)(a),
+	}
+
+	for _, word := range a.Words {
+		out.Words = append(out.Words, &W{
+			StartTime: durToMs(word.StartTime),
+			Duration:  durToMs(word.Duration),
+			WordAlias: (*WordAlias)(word),
+		})
+
+	}
+	return json.Marshal(out)
 }
 
 // Result encapsulates the Alternatives for a specific endpointed utterance
 type Result struct {
-	ChannelID int
-	Nbest     []Alternative
+	ChannelID int           `json:"channel_id"`
+	Nbest     []Alternative `json:"nbest"`
 }
 
 // ResultFormatter formats a slice of RecognitionResults, e.g. an entire file's worth
@@ -87,12 +116,13 @@ func (f Formatter) Format(results []*cubicpb.RecognitionResult) (string, error) 
 				StartTime:  durToMs(alternative.StartTime),
 				Confidence: alternative.Confidence,
 				Transcript: alternative.Transcript,
+				Words:      alternative.Words,
 			})
 		}
 		entries = append(entries, entry)
 	}
 
-	// Sort by startTime (results.Alternatives[0].Words[0].StartTime)
+	// Sort by startTime (results.Alternatives[0].StartTime)
 	// If start times are the same, maintain the original order.
 	//
 	// While CubicSvr guarentees that the of results entries are order
@@ -114,11 +144,11 @@ func (f Formatter) Format(results []*cubicpb.RecognitionResult) (string, error) 
 	return string(str), nil
 }
 
-func durToMs(d *duration.Duration) int {
+func durToMs(d *duration.Duration) int64 {
 	if d == nil {
 		return -1
 	}
-	return int(d.Seconds*1000) + int(d.Nanos/1000/1000)
+	return int64(d.Seconds*1000) + int64(d.Nanos/1000/1000)
 }
 
 func hasEmptyTranscript(r *cubicpb.RecognitionResult) bool {

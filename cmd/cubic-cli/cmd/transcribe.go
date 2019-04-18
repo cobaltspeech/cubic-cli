@@ -415,16 +415,22 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 			audioChannelsUint32 = append(audioChannelsUint32, uint32(c))
 		}
 
+		cfg := &cubicpb.RecognitionConfig{
+			ModelId:       model,
+			AudioEncoding: audioEncoding,
+			IdleTimeout:   &pbduration.Duration{Seconds: 30},
+			AudioChannels: audioChannelsUint32,
+		}
+
+		if outputFormat == "timeline" {
+			cfg.EnableWordConfidence = true
+			cfg.EnableWordTimeOffsets = true
+			cfg.EnableRawTranscript = true
+		}
+
 		// Create and send the Streaming Recognize config
 		err = client.StreamingRecognize(context.Background(),
-			&cubicpb.RecognitionConfig{
-				ModelId:               model,
-				AudioEncoding:         audioEncoding,
-				EnableWordTimeOffsets: true,
-				EnableRawTranscript:   true,
-				IdleTimeout:           &pbduration.Duration{Seconds: 30},
-				AudioChannels:         audioChannelsUint32,
-			},
+			cfg,
 			audio, // The file to send
 			func(response *cubicpb.RecognitionResponse) { // The callback for results
 				verbosePrintf(os.Stdout, "Worker%2d recieved result segment #%d for Utterance '%s'.\n", workerID, segmentID, input.uttID)

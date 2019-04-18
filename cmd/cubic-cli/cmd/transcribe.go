@@ -39,10 +39,10 @@ type inputs struct {
 }
 
 type outputs struct {
-	uttID    string
-	segment  int
-	response []*cubicpb.RecognitionResult
+	uttID     string
+	responses []responseResults
 }
+type responseResults []*cubicpb.RecognitionResult
 
 // Argument variables.
 var model string
@@ -199,7 +199,7 @@ func transcribe() error {
 
 	// Setup channels for communicating between the various goroutines
 	fileChannel := make(chan inputs)
-	resultsChannel := make(chan outputs)
+	fileResultsChannel := make(chan outputs)
 	errChannel := make(chan error)
 
 	// Set up a cubicsvr client
@@ -223,7 +223,7 @@ func transcribe() error {
 	// Starts multipe goroutines that each pull from the fileChannel,
 	// send requests to cubic server, and then adds the results to the
 	// results channel
-	startWorkers(client, fileChannel, resultsChannel, errChannel)
+	startWorkers(client, fileChannel, fileResultsChannel, errChannel)
 
 	// Handle errors
 	errCount := 0
@@ -239,7 +239,7 @@ func transcribe() error {
 	}()
 
 	// Deal with the transcription results
-	processResults(outputWriter, resultsChannel)
+	processResults(outputWriter, fileResultsChannel)
 
 	wg.Wait()
 
@@ -353,26 +353,26 @@ func feedInputFiles(fileChannel chan<- inputs, files []inputs) {
 
 // Open the audio files and transcribe them, in parallel
 func startWorkers(client *cubic.Client, fileChannel <-chan inputs,
-	resultsChannel chan<- outputs, errChannel chan<- error) {
+	fileResultsChannel chan<- outputs, errChannel chan<- error) {
 
 	wg := &sync.WaitGroup{}
 	wg.Add(nConcurrentRequests)
 	verbosePrintf(os.Stdout, "Starting '%d' workers.\n", nConcurrentRequests)
 	for i := 0; i < nConcurrentRequests; i++ {
-		go transcribeFiles(i, wg, client, fileChannel, resultsChannel, errChannel)
+		go transcribeFiles(i, wg, client, fileChannel, fileResultsChannel, errChannel)
 	}
 
 	// close the results channel once all the workers have finished their steps
 	go func() {
 		wg.Wait()
-		close(resultsChannel)
+		close(fileResultsChannel)
 		close(errChannel)
 		verbosePrintf(os.Stdout, "Finished getting results back from cubicsvr for all files.\n")
 	}()
 }
 
 func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
-	fileChannel <-chan inputs, resultsChannel chan<- outputs, errChannel chan<- error) {
+	fileChannel <-chan inputs, fileResultsChannel chan<- outputs, errChannel chan<- error) {
 	verbosePrintf(os.Stdout, "Worker %d starting\n", workerID)
 	for input := range fileChannel {
 
@@ -430,37 +430,41 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 
 		}
 
+		// create buffer for file's results
+		var fileResponses []responseResults
 		// Create and send the Streaming Recognize config
 		err = client.StreamingRecognize(context.Background(),
 			cfg,
 			audio, // The file to send
 			func(response *cubicpb.RecognitionResponse) { // The callback for results
 				verbosePrintf(os.Stdout, "Worker%2d recieved result segment #%d for Utterance '%s'.\n", workerID, segmentID, input.uttID)
-				resultsChannel <- outputs{
-					uttID:    input.uttID,
-					segment:  segmentID,
-					response: response.Results, // TODO return the individual results, instead of slice of them.
-				}
+				fileResponses = append(fileResponses, response.Results)
 				segmentID++
 			})
 		if err != nil {
 			verbosePrintf(os.Stderr, "Error streaming file: %v\n", err)
 			errChannel <- simplifyGrpcErrors("error streaming the file", err)
 		}
+		fileResultsChannel <- outputs{
+			uttID:     input.uttID,
+			responses: fileResponses,
+		}
 	}
 	verbosePrintf(os.Stdout, "Worker %d done\n", workerID)
 	wg.Done()
 }
 
-func processResults(outputWriter io.Writer, resultsChannel <-chan outputs) {
+func processResults(outputWriter io.Writer, fileResultsChannel <-chan outputs) {
 	// Keep a list of all non-partial results.  Cache them until all results have been recieved.
 	finalResults := make(map[string][]*cubicpb.RecognitionResult)
 
 	// Append every non-partial result to list.  Continues reading until the channel is closed.
-	for result := range resultsChannel {
-		for _, resp := range result.response {
-			if !resp.IsPartial {
-				finalResults[result.uttID] = append(finalResults[result.uttID], resp)
+	for result := range fileResultsChannel {
+		for _, responses := range result.responses {
+			for _, resp := range responses {
+				if !resp.IsPartial {
+					finalResults[result.uttID] = append(finalResults[result.uttID], resp)
+				}
 			}
 		}
 	}

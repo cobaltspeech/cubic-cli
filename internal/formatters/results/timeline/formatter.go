@@ -15,6 +15,7 @@
 package timeline
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -31,10 +32,21 @@ type Alternative struct {
 	Words      []*cubicpb.WordInfo `json:"-"`
 }
 
+func marshal(v interface{}) (*bytes.Buffer, error) {
+	buf := new(bytes.Buffer)
+	enc := json.NewEncoder(buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(v); err != nil {
+		return nil, fmt.Errorf("error serializing results: %v", err)
+	}
+	return buf, nil
+}
+
 // MarshalJSON hides the unfriendly JSON output for duration.Duration
 // The pattern of aliasing the type we want to shadow is from the
 // blog post http://choly.ca/post/go-json-marshalling/
-func (a *Alternative) MarshalJSON() ([]byte, error) {
+func (a Alternative) MarshalJSON() ([]byte, error) {
 	// create aliases so we have all the same fields but none of the methods and don't inherit the original type's MarshalJSON
 	type Alias Alternative
 	type WordAlias cubicpb.WordInfo
@@ -45,9 +57,9 @@ func (a *Alternative) MarshalJSON() ([]byte, error) {
 	}
 	out := &struct {
 		Words []*W `json:"words,omitempty"`
-		*Alias
+		Alias
 	}{
-		Alias: (*Alias)(a),
+		Alias: (Alias)(a),
 	}
 
 	for _, word := range a.Words {
@@ -57,7 +69,12 @@ func (a *Alternative) MarshalJSON() ([]byte, error) {
 			WordAlias: (*WordAlias)(word),
 		})
 	}
-	return json.Marshal(out)
+	buf, err := marshal(out)
+	if err != nil {
+		fmt.Println("Error in marshalJSON", err)
+		return []byte{}, err
+	}
+	return buf.Bytes(), nil
 }
 
 // Result encapsulates the Alternatives for a specific endpointed utterance
@@ -148,12 +165,11 @@ func (f Formatter) Format(results []*cubicpb.RecognitionResult) (string, error) 
 		return entries[i].Nbest[0].StartTime < entries[j].Nbest[0].StartTime
 	})
 
-	str, err := json.MarshalIndent(entries, "", "  ")
+	buf, err := marshal(&entries)
 	if err != nil {
 		return "", fmt.Errorf("error serializing results: %v", err)
 	}
-
-	return string(str), nil
+	return buf.String(), nil
 }
 
 func durToMs(d *duration.Duration) int64 {

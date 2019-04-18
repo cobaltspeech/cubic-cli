@@ -90,7 +90,7 @@ func init() {
 			"reasonable value.  A lower number is suggested if there are multiple \n"+
 			"clients connecting to the same machine.")
 
-	transcribeCmd.Flags().IntVarP(&maxAlternatives, "maxAlts", "a", 1,
+	transcribeCmd.Flags().IntVarP(&maxAlternatives, "fmt.timeline.maxAlts", "a", 1,
 		"Maximum number of alternatives to provide for each result, if the outputFormat includes alternatives (such as 'timeline').")
 }
 
@@ -425,6 +425,8 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 		if outputFormat == "timeline" {
 			cfg.EnableWordConfidence = true
 			cfg.EnableWordTimeOffsets = true
+
+			//TODO(julie) Once we've updated cubicsvr so it can output formatted transcript and word-level features, remove this line
 			cfg.EnableRawTranscript = true
 		}
 

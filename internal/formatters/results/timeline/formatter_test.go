@@ -1,4 +1,16 @@
-// Copyright (2019) Cobalt Speech and Language Inc.  All rights reserved.
+// Copyright (2019) Cobalt Speech and Language Inc.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package timeline_test
 
@@ -25,61 +37,58 @@ func TestExxonFormatter_Order(t *testing.T) {
 		newResult("partials are ignored", 1500, 0, true), // Shouldn't show up as a partial result.
 		newResult("", 1500, 0, false),                    // Shouldn't show up with an empty transcript.
 	}
-
-	wantStr := `[
+	want := []timeline.Result{
 		{
-		  "ChannelID": 0,
-		  "Nbest": [
-			{
-			  "start_time": 500,
-			  "confidence": 0.6,
-			  "transcript": "One0"
-			}
-		  ]
+			ChannelID: 0,
+			Nbest: []timeline.Alternative{
+				{
+					StartTime:  500,
+					Confidence: 0.6,
+					Transcript: "One0",
+				},
+			},
 		},
 		{
-		  "ChannelID": 1,
-		  "Nbest": [
-			{
-			  "start_time": 500,
-			  "confidence": 0.6,
-			  "transcript": "One1"
-			}
-		  ]
+			ChannelID: 1,
+			Nbest: []timeline.Alternative{
+				{
+					StartTime:  500,
+					Confidence: 0.6,
+					Transcript: "One1",
+				},
+			},
 		},
 		{
-		  "ChannelID": 0,
-		  "Nbest": [
-			{
-			  "start_time": 500,
-			  "confidence": 0.6,
-			  "transcript": "One0.1"
-			}
-		  ]
+			ChannelID: 0,
+			Nbest: []timeline.Alternative{
+				{
+					StartTime:  500,
+					Confidence: 0.6,
+					Transcript: "One0.1",
+				},
+			},
 		},
 		{
-		  "ChannelID": 1,
-		  "Nbest": [
-			{
-			  "start_time": 750,
-			  "confidence": 0.6,
-			  "transcript": "Two"
-			}
-		  ]
+			ChannelID: 1,
+			Nbest: []timeline.Alternative{
+				{
+					StartTime:  750,
+					Confidence: 0.6,
+					Transcript: "Two",
+				},
+			},
 		},
 		{
-		  "ChannelID": 0,
-		  "Nbest": [
-			{
-			  "start_time": 7500,
-			  "confidence": 0.6,
-			  "transcript": "Three"
-			}
-		  ]
-		}
-	]`
-	var want []timeline.Result
-	json.Unmarshal([]byte(wantStr), &want)
+			ChannelID: 0,
+			Nbest: []timeline.Alternative{
+				{
+					StartTime:  7500,
+					Confidence: 0.6,
+					Transcript: "Three",
+				},
+			},
+		},
+	}
 
 	cfg := timeline.Config{
 		MaxAlternatives: 1,
@@ -101,7 +110,6 @@ func TestExxonFormatter_Order(t *testing.T) {
 		t.Errorf("Error unmarshalling formatted result: %s", err)
 	}
 
-	// Test for either of the two possible answers.
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Unexpected output.\nGot:\n%v\n\nWant:\n%v\n\n", got, want)
 	}

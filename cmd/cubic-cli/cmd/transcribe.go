@@ -33,13 +33,15 @@ import (
 )
 
 type inputs struct {
-	uttID    string
-	filepath string
+	uttID        string
+	filepath     string
+	outputWriter io.Writer // gets passed to the outputs struct's outputWriter
 }
 
 type outputs struct {
-	uttID     string
-	responses []responseResults
+	uttID        string
+	responses    []responseResults
+	outputWriter io.Writer
 }
 type responseResults []*cubicpb.RecognitionResult
 
@@ -47,7 +49,7 @@ type responseResults []*cubicpb.RecognitionResult
 var model string
 var inputFile string
 var listFile bool
-var resultsFile string
+var resultsPath string
 var outputFormat string
 var nConcurrentRequests int
 var audioChannels []int
@@ -56,41 +58,47 @@ var maxAlternatives int
 
 // Initialize flags.
 func init() {
-	transcribeCmd.PersistentFlags().StringVarP(&model, "model", "m", "1",
+	transcribeCmd.PersistentFlags().StringVarP(&model, "model", "m", "1", ""+
 		"Selects which model ID to use for transcribing.\n"+
-			"Must match a model listed from \"models\" subcommand.")
+		"Must match a model listed from \"models\" subcommand.")
 
-	transcribeCmd.Flags().BoolVarP(&listFile, "list-file", "l", false,
+	transcribeCmd.Flags().BoolVarP(&listFile, "list-file", "l", false, ""+
 		"When true, the FILE_PATH is pointing to a file containing a list of \n"+
-			"\"UtteranceID \\t path/to/audio.wav\", one entry per line.")
+		"\"UtteranceID \\t path/to/audio.wav\", one entry per line.")
 
-	transcribeCmd.Flags().StringVarP(&resultsFile, "outputFile", "o", "-",
-		"File to send output to.  \"-\" indicates stdout.")
+	transcribeCmd.Flags().StringVarP(&resultsPath, "output", "o", "-", ""+
+		"Path to where the results should be written to.\n"+
+		"In single file mode, this path should be a file.\n"+
+		"In list file mode, this path should be a directory.  Each file processed will\n"+
+		"  have a separate output file, using the imput file's name, with a .txt extention.\n"+
+		"\"-\" indicates stdout in either case.  In list file mode, each entry will be \n"+
+		"  prefaced by the utterance ID and have an extra newline seperating it from the next. ")
 
 	transcribeCmd.Flags().StringVarP(&outputFormat, "outputFormat", "f", "timeline",
 		"Format of output.  Can be [json,utterance-json,json-pretty,timeline].")
 
-	transcribeCmd.Flags().IntSliceVarP(&audioChannels, "audioChannels", "c", []int{},
+	transcribeCmd.Flags().IntSliceVarP(&audioChannels, "audioChannels", "c", []int{}, ""+
 		"Audio channels to transcribe.  Defaults to mono.\n"+
-			"  \"0\" for mono\n"+
-			"  \"0,1\" for stereo\n"+
-			"  \"0,2\" for first and third channels\n"+
-			"Overrides --stereo if both are included.")
+		"  \"0\" for mono\n"+
+		"  \"0,1\" for stereo\n"+
+		"  \"0,2\" for first and third channels\n"+
+		"Overrides --stereo if both are included.")
 
-	transcribeCmd.Flags().BoolVar(&audioChannelsStereo, "stereo", false,
+	transcribeCmd.Flags().BoolVar(&audioChannelsStereo, "stereo", false, ""+
 		"Sets --audioChannels \"0,1\" which transcribes both audio channels of a stereo file.\n"+
-			"If --audioChannels is set, this flag is ignored.")
+		"If --audioChannels is set, this flag is ignored.")
 
-	transcribeCmd.Flags().IntVarP(&nConcurrentRequests, "workers", "n", 1,
+	transcribeCmd.Flags().IntVarP(&nConcurrentRequests, "workers", "n", 1, ""+
 		"Number of concurrent requests to send to cubicsvr.\n"+
-			"Please note, while this value is defined client-side the performance \n"+
-			"will be limited by the available computational ability of the server.  \n"+
-			"If you are the only connection to an 8-core server, then \"-n 8\" is a \n"+
-			"reasonable value.  A lower number is suggested if there are multiple \n"+
-			"clients connecting to the same machine.")
+		"Please note, while this value is defined client-side the performance \n"+
+		"will be limited by the available computational ability of the server.  \n"+
+		"If you are the only connection to an 8-core server, then \"-n 8\" is a \n"+
+		"reasonable value.  A lower number is suggested if there are multiple \n"+
+		"clients connecting to the same machine.")
 
 	transcribeCmd.Flags().IntVarP(&maxAlternatives, "fmt.timeline.maxAlts", "a", 1,
 		"Maximum number of alternatives to provide for each result, if the outputFormat includes alternatives (such as 'timeline').")
+
 }
 
 var longMsg = `
@@ -145,15 +153,37 @@ var transcribeCmd = &cobra.Command{
 		inputFile = args[0]
 
 		// Check for overwritting an existing results file.
-		if resultsFile != "-" {
-			// Check to see if file exists
-			if _, err := os.Stat(resultsFile); err == nil {
-				// The file exists, since it didn't throw an error, so explain why we are quitting
-				return fmt.Errorf("Aborting because --outputFile '%s' already exists", resultsFile)
-			} else if !os.IsNotExist(err) {
-				// We care about all errors, except the FileDoesntExist error.
-				// That would indicate it is safe to procced with the program as normal
-				return fmt.Errorf("Error while checking for existing --outputFile: %v", err)
+		if resultsPath != "-" {
+			switch {
+			case listFile:
+				// In list file mode, we want either "-" or a valid folder.
+				fi, err := os.Stat(resultsPath)
+				switch {
+				case err != nil:
+					return fmt.Errorf("Aborting: failed getting stats about --output: %v", err)
+				case !fi.Mode().IsDir():
+					return fmt.Errorf("Aborting because --output '%s' is not a directory", resultsPath)
+					// Note: Checking for existing `resultsPath/utteranceID_results.txt` files occures later
+					//       in the loadListFiles() function, once we read the list file contents.
+				}
+
+			case !listFile:
+				// In single file mode, we want either "-" or a non-existing file.
+				// Check to see if file exists
+				fi, err := os.Stat(resultsPath)
+				switch {
+				case err != nil:
+					if !os.IsNotExist(err) {
+						// We care about all errors, except the FileDoesntExist error.
+						// That would indicate it is safe to procced with the program as normal
+						return fmt.Errorf("Error while checking for existing --output: %v", err)
+					}
+				case fi.IsDir():
+					return fmt.Errorf("Aborting because --output '%s' is a directory, not a file", resultsPath)
+				case err == nil:
+					// Else, the file exists, since it didn't throw an error, so explain why we are quitting
+					return fmt.Errorf("Aborting because --output '%s' already exists", resultsPath)
+				}
 			}
 		}
 
@@ -218,6 +248,8 @@ func transcribe() error {
 	startWorkers(client, fileChannel, fileResultsChannel, errChannel)
 
 	// Handle errors
+	errorWaitGroup := &sync.WaitGroup{} // Wait group to let the main process know we are done reporting errors
+	errorWaitGroup.Add(1)
 	go func() {
 		errCount := 0
 		verbosePrintf(os.Stdout, "Watching for errors during process.\n")
@@ -228,41 +260,49 @@ func transcribe() error {
 		if errCount > 0 {
 			fmt.Fprintf(os.Stderr, "-----------\nThere were a total of %d failed files.\n", errCount)
 		}
+		errorWaitGroup.Done()
 	}()
-
-	// Get output writter (file or stdout)
-	outputWriter, err := getOutputWriter(resultsFile)
-	if err != nil {
-		return err
-	}
 
 	// Deal with the transcription results
 	switch outputFormat {
 	case "utterance-json":
-		processResultsUtteranceJSON(outputWriter, fileResultsChannel)
+		processResultsUtteranceJSON(fileResultsChannel)
 	case "json":
-		processResultsJSON(outputWriter, fileResultsChannel, false)
+		processResultsJSON(fileResultsChannel, false)
 	case "json-pretty":
-		processResultsJSON(outputWriter, fileResultsChannel, true)
+		processResultsJSON(fileResultsChannel, true)
 	case "timeline":
-		processResultsTimeline(outputWriter, fileResultsChannel)
+		processResultsTimeline(fileResultsChannel)
 	default:
 		fmt.Fprintf(os.Stderr, "Internal error: invalid outputFormat '%s'\n", outputFormat)
 	}
 
-	if resultsFile != "-" {
-		fmt.Printf("\nFinished writting results to file '%s'!\n\n", resultsFile)
+	if resultsPath != "-" {
+		fmt.Printf("\nFinished writting results to file '%s'!\n\n", resultsPath)
 	}
+
+	errorWaitGroup.Wait() // Wait for all errors to finish
 
 	return nil
 }
 
-// Get a reference to outputfile/stdout, depending on the input of
+// Get a reference to output/stdout, depending on the input of
 func getOutputWriter(out string) (io.Writer, error) {
 	if out == "-" {
 		return os.Stdout, nil
 	}
 
+	// Check for existing file
+	if _, err := os.Stat(out); err == nil {
+		// The file exists, since it didn't throw an error, so explain why we are quitting
+		return nil, fmt.Errorf("file '%s' already exists", out)
+	} else if !os.IsNotExist(err) {
+		// We care about all errors, except the FileDoesntExist error.
+		// That would indicate it is safe to procced with the program as normal
+		return nil, fmt.Errorf("error while checking for existing file '%s': %v", out, err)
+	}
+
+	// Create the file
 	file, err := os.Create(out)
 	if err != nil {
 		return nil, fmt.Errorf("Error opening output file: %v", err)
@@ -278,8 +318,16 @@ func loadFiles(path string) ([]inputs, error) {
 }
 
 func loadSingleFile(path string) ([]inputs, error) {
+	outputWriter, err := getOutputWriter(resultsPath)
+	if err != nil {
+		return nil, fmt.Errorf("Failed opening output file: %v", err)
+	}
 	return []inputs{
-		inputs{uttID: "utt_0", filepath: path},
+		inputs{
+			uttID:        "utt_0",
+			filepath:     path,
+			outputWriter: outputWriter,
+		},
 	}, nil
 }
 
@@ -331,10 +379,21 @@ func loadListFiles(path string) ([]inputs, error) {
 			}
 		}
 
+		// Generate an outputWriter for each file
+		var outputWriter io.Writer
+		outputWriter = os.Stdout
+		if resultsPath != "-" {
+			var err error
+			if outputWriter, err = getOutputWriter(filepath.Join(resultsPath, id+"_results.txt")); err != nil {
+				return nil, fmt.Errorf("Failed setting up results file: %v", err)
+			}
+		}
+
 		// Add the new entry to the list
 		utterances = append(utterances, inputs{
-			uttID:    id,
-			filepath: fpath,
+			uttID:        id,
+			filepath:     fpath,
+			outputWriter: outputWriter,
 		})
 		lineNumber++
 	}
@@ -388,7 +447,7 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 		audio, err := os.Open(input.filepath)
 		if err != nil {
 			errChannel <- fmt.Errorf(
-				"Error: skipping Utterance '%s', couldn't open file '%s'",
+				"Error: skipping Utterance '%s', couldn't open audio file '%s'",
 				input.uttID, input.filepath)
 			continue
 		}
@@ -443,26 +502,36 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 		// Create and send the Streaming Recognize config
 		err = client.StreamingRecognize(context.Background(),
 			cfg,
-			audio, // The file to send
+			audio, // The audio file to send
 			func(response *cubicpb.RecognitionResponse) { // The callback for results
 				verbosePrintf(os.Stdout, "Worker%2d recieved result segment #%d for Utterance '%s'.\n", workerID, segmentID, input.uttID)
 				fileResponses = append(fileResponses, response.Results)
 				segmentID++
 			})
+
 		if err != nil {
 			verbosePrintf(os.Stderr, "Error streaming file: %v\n", err)
 			errChannel <- simplifyGrpcErrors("error streaming the file", err)
+			continue
 		}
+
+		if input.outputWriter == nil {
+			fmt.Printf("Found another nil outputWriter\n")
+		}
+
 		fileResultsChannel <- outputs{
-			uttID:     input.uttID,
-			responses: fileResponses,
+			uttID:        input.uttID,
+			responses:    fileResponses,
+			outputWriter: input.outputWriter,
 		}
 	}
 	verbosePrintf(os.Stdout, "Worker %d done\n", workerID)
 	wg.Done()
 }
 
-func processResultsUtteranceJSON(outputWriter io.Writer, fileResultsChannel <-chan outputs) {
+// processResultsUtteranceJSON returns the same results if it's single file or listfile, stdout or to a file.
+// Each entry is a line following the pattern `utterance_ID \t json_serialization_of_results`.
+func processResultsUtteranceJSON(fileResultsChannel <-chan outputs) error {
 	for fileResults := range fileResultsChannel {
 		uttID := fileResults.uttID
 		response := fileResults.responses
@@ -470,45 +539,36 @@ func processResultsUtteranceJSON(outputWriter io.Writer, fileResultsChannel <-ch
 			if str, err := json.Marshal(result); err != nil {
 				fmt.Fprintf(os.Stderr, "[Error serializing]: %s_Segment%d\t%v\n", uttID, nSegment, err)
 			} else {
-				fmt.Fprintf(outputWriter, "%s_%d\t%s\n", uttID, nSegment, string(str))
-			}
-		}
-	}
-}
-
-func processResultsJSON(outputWriter io.Writer, fileResultsChannel <-chan outputs, pretty bool) {
-	// Keep a list of all non-partial results.  Cache them until all results have been recieved.
-	finalResults := make(map[string][]*cubicpb.RecognitionResult)
-
-	// Append every non-partial result to list.  Continues reading until the channel is closed.
-	for result := range fileResultsChannel {
-		for _, responses := range result.responses {
-			for _, resp := range responses {
-				if !resp.IsPartial {
-					finalResults[result.uttID] = append(finalResults[result.uttID], resp)
-				}
+				fmt.Fprintf(fileResults.outputWriter, "%s_%d\t%s\n", uttID, nSegment, string(str))
 			}
 		}
 	}
 
-	// Serialize the results
-	var bytes []byte
-	var err error
-	if pretty {
-		bytes, err = json.MarshalIndent(finalResults, "", "  ")
-	} else {
-		bytes, err = json.Marshal(finalResults)
-	}
+	return nil
+}
 
-	// Print results to outputWritter
-	if err == nil {
-		fmt.Fprint(outputWriter, string(bytes))
-	} else {
-		fmt.Fprintf(os.Stderr, "Error serializing results: %v\n", err)
+func processResultsJSON(fileResultsChannel <-chan outputs, pretty bool) {
+	for fileResults := range fileResultsChannel {
+		var bytes []byte
+		var err error
+
+		// Serialize the results
+		if pretty {
+			bytes, err = json.MarshalIndent(fileResults, "", "  ")
+		} else {
+			bytes, err = json.Marshal(fileResults)
+		}
+
+		// Print results to outputWriter
+		if err == nil {
+			fmt.Fprint(fileResults.outputWriter, string(bytes))
+		} else {
+			fmt.Fprintf(os.Stderr, "Error serializing results: %v\n", err)
+		}
 	}
 }
 
-func processResultsTimeline(outputWriter io.Writer, fileResultsChannel <-chan outputs) {
+func processResultsTimeline(fileResultsChannel <-chan outputs) {
 	// Create formatter
 	cfg := timeline.Config{MaxAlternatives: maxAlternatives}
 	formatter, err := cfg.CreateFormatter()
@@ -517,19 +577,22 @@ func processResultsTimeline(outputWriter io.Writer, fileResultsChannel <-chan ou
 		return
 	}
 
-	// Append every non-partial result to list.  Continues reading until the channel is closed.
-	for result := range fileResultsChannel {
+	// Continues reading until the fileResultsChannel is closed
+	for fileResults := range fileResultsChannel {
+		// Flatten the results, the formatter will separate out partials and empty results.
 		var all []*cubicpb.RecognitionResult
-		for _, resp := range result.responses {
+		for _, resp := range fileResults.responses {
 			all = append(all, resp...)
 		}
 
 		// Format the results
 		output, err := formatter.Format(all)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Formatting results: %v", err)
-		} else {
-			fmt.Fprintf(outputWriter, "Timeline for '%s':\n%s\n\n", result.uttID, output)
+			fmt.Fprintf(os.Stderr, "Error while formatting results: %v", err)
+			continue
 		}
+
+		// Format and print the results to the outputWriter
+		fmt.Fprintf(fileResults.outputWriter, "Timeline for '%s':\n%s\n\n", fileResults.uttID, output)
 	}
 }

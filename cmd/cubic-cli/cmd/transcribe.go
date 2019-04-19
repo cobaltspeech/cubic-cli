@@ -426,8 +426,6 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 			cfg.EnableWordConfidence = true
 			cfg.EnableWordTimeOffsets = true
 
-			//TODO(julie) Once we've updated cubicsvr so it can output formatted transcript and word-level features, remove this line
-			cfg.EnableRawTranscript = true
 		}
 
 		// Create and send the Streaming Recognize config

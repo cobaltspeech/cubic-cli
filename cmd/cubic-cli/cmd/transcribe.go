@@ -264,6 +264,7 @@ func transcribe() error {
 	}()
 
 	// Deal with the transcription results
+	// Note, these processResults* functions will block until all transcription results have been recieved.
 	nFilesWritten := 0
 	switch outputFormat {
 	case "utterance-json":
@@ -540,7 +541,7 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 func processResultsUtteranceJSON(fileResultsChannel <-chan outputs) int {
 	count := 0
 	for fileResults := range fileResultsChannel {
-		count++ // Increment count
+		count++ // Increment file count
 
 		uttID := fileResults.UttID
 		response := fileResults.Responses
@@ -562,7 +563,7 @@ func processResultsUtteranceJSON(fileResultsChannel <-chan outputs) int {
 func processResultsJSON(fileResultsChannel <-chan outputs, pretty bool) int {
 	count := 0
 	for fileResults := range fileResultsChannel {
-		count++ // Increment count
+		count++ // Increment file count
 
 		var bytes []byte
 		var err error
@@ -602,7 +603,7 @@ func processResultsTimeline(fileResultsChannel <-chan outputs) int {
 
 	// Continues reading until the fileResultsChannel is closed
 	for fileResults := range fileResultsChannel {
-		count++ // Increment count
+		count++ // Increment file count
 
 		// Flatten the results, the formatter will separate out partials and empty results.
 		var all []*cubicpb.RecognitionResult
@@ -617,12 +618,12 @@ func processResultsTimeline(fileResultsChannel <-chan outputs) int {
 			continue
 		}
 
-		// Print the results to the outputWriter
-		fmt.Fprintf(fileResults.outputWriter, "Timeline for '%s':\n%s\n\n", fileResults.UttID, output)
-
-		// Close files, but not stdout
-		if resultsPath != "-" {
-			fileResults.outputWriter.Close()
+		// Format and print the results to the outputWriter
+		if resultsPath == "-" { //Add a header to each entry
+			fmt.Fprintf(fileResults.outputWriter, "Timeline for '%s':\n%s\n\n", fileResults.UttID, output)
+		} else { // When writing to a file, don't include the same header
+			fmt.Fprintf(fileResults.outputWriter, "%s", output)
+			fileResults.outputWriter.Close() // Close file.
 		}
 	}
 	return count

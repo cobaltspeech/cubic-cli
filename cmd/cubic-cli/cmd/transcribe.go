@@ -33,15 +33,15 @@ import (
 )
 
 type inputs struct {
-	uttID        string
-	filepath     string
-	outputWriter io.Writer // gets passed to the outputs struct's outputWriter
+	uttID      string
+	filepath   string
+	outputPath string
 }
 
 type outputs struct {
-	uttID        string
-	responses    []responseResults
-	outputWriter io.Writer
+	UttID        string
+	Responses    []responseResults
+	outputWriter io.WriteCloser
 }
 type responseResults []*cubicpb.RecognitionResult
 
@@ -264,21 +264,26 @@ func transcribe() error {
 	}()
 
 	// Deal with the transcription results
+	nFilesWritten := 0
 	switch outputFormat {
 	case "utterance-json":
-		processResultsUtteranceJSON(fileResultsChannel)
+		nFilesWritten = processResultsUtteranceJSON(fileResultsChannel)
 	case "json":
-		processResultsJSON(fileResultsChannel, false)
+		nFilesWritten = processResultsJSON(fileResultsChannel, false)
 	case "json-pretty":
-		processResultsJSON(fileResultsChannel, true)
+		nFilesWritten = processResultsJSON(fileResultsChannel, true)
 	case "timeline":
-		processResultsTimeline(fileResultsChannel)
+		nFilesWritten = processResultsTimeline(fileResultsChannel)
 	default:
 		fmt.Fprintf(os.Stderr, "Internal error: invalid outputFormat '%s'\n", outputFormat)
 	}
 
 	if resultsPath != "-" {
-		fmt.Printf("\nFinished writting results to file '%s'!\n\n", resultsPath)
+		if listFile {
+			fmt.Printf("\nFinished writting %d results to folder '%s'!\n\n", nFilesWritten, resultsPath)
+		} else {
+			fmt.Printf("\nFinished writting results to file '%s'!\n\n", resultsPath)
+		}
 	}
 
 	errorWaitGroup.Wait() // Wait for all errors to finish
@@ -286,24 +291,27 @@ func transcribe() error {
 	return nil
 }
 
-// Get a reference to output/stdout, depending on the input of
-func getOutputWriter(out string) (io.Writer, error) {
-	if out == "-" {
-		return os.Stdout, nil
-	}
-
+func checkFileExists(path string) error {
 	// Check for existing file
-	if _, err := os.Stat(out); err == nil {
+	if _, err := os.Stat(path); err == nil {
 		// The file exists, since it didn't throw an error, so explain why we are quitting
-		return nil, fmt.Errorf("file '%s' already exists", out)
+		return fmt.Errorf("file '%s' already exists", path)
 	} else if !os.IsNotExist(err) {
 		// We care about all errors, except the FileDoesntExist error.
 		// That would indicate it is safe to procced with the program as normal
-		return nil, fmt.Errorf("error while checking for existing file '%s': %v", out, err)
+		return fmt.Errorf("error while checking for existing file '%s': %v", path, err)
+	}
+	return nil
+}
+
+// Get a reference to output/stdout, depending on the input of
+func getOutputWriter(path string) (io.WriteCloser, error) {
+	if path == "-" {
+		return os.Stdout, nil
 	}
 
 	// Create the file
-	file, err := os.Create(out)
+	file, err := os.Create(path)
 	if err != nil {
 		return nil, fmt.Errorf("Error opening output file: %v", err)
 	}
@@ -318,15 +326,11 @@ func loadFiles(path string) ([]inputs, error) {
 }
 
 func loadSingleFile(path string) ([]inputs, error) {
-	outputWriter, err := getOutputWriter(resultsPath)
-	if err != nil {
-		return nil, fmt.Errorf("Failed opening output file: %v", err)
-	}
 	return []inputs{
 		inputs{
-			uttID:        "utt_0",
-			filepath:     path,
-			outputWriter: outputWriter,
+			uttID:      "utt_0",
+			filepath:   path,
+			outputPath: resultsPath, // Already checked for existing output file.
 		},
 	}, nil
 }
@@ -380,20 +384,19 @@ func loadListFiles(path string) ([]inputs, error) {
 		}
 
 		// Generate an outputWriter for each file
-		var outputWriter io.Writer
-		outputWriter = os.Stdout
+		var outputPath = "-"
 		if resultsPath != "-" {
-			var err error
-			if outputWriter, err = getOutputWriter(filepath.Join(resultsPath, id+"_results.txt")); err != nil {
-				return nil, fmt.Errorf("Failed setting up results file: %v", err)
+			outputPath = filepath.Join(resultsPath, id+"_results.txt")
+			if err := checkFileExists(outputPath); err != nil {
+				return nil, fmt.Errorf("Failed setting up a results file: %v", err)
 			}
 		}
 
 		// Add the new entry to the list
 		utterances = append(utterances, inputs{
-			uttID:        id,
-			filepath:     fpath,
-			outputWriter: outputWriter,
+			uttID:      id,
+			filepath:   fpath,
+			outputPath: outputPath,
 		})
 		lineNumber++
 	}
@@ -515,14 +518,17 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 			continue
 		}
 
-		if input.outputWriter == nil {
-			fmt.Printf("Found another nil outputWriter\n")
+		// Set up output file writer
+		outputWriter, err := getOutputWriter(input.outputPath)
+		if err != nil {
+			errChannel <- err
+			continue
 		}
 
 		fileResultsChannel <- outputs{
-			uttID:        input.uttID,
-			responses:    fileResponses,
-			outputWriter: input.outputWriter,
+			UttID:        input.uttID,
+			Responses:    fileResponses,
+			outputWriter: outputWriter,
 		}
 	}
 	verbosePrintf(os.Stdout, "Worker %d done\n", workerID)
@@ -531,10 +537,13 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 
 // processResultsUtteranceJSON returns the same results if it's single file or listfile, stdout or to a file.
 // Each entry is a line following the pattern `utterance_ID \t json_serialization_of_results`.
-func processResultsUtteranceJSON(fileResultsChannel <-chan outputs) error {
+func processResultsUtteranceJSON(fileResultsChannel <-chan outputs) int {
+	count := 0
 	for fileResults := range fileResultsChannel {
-		uttID := fileResults.uttID
-		response := fileResults.responses
+		count++ // Increment count
+
+		uttID := fileResults.UttID
+		response := fileResults.Responses
 		for nSegment, result := range response {
 			if str, err := json.Marshal(result); err != nil {
 				fmt.Fprintf(os.Stderr, "[Error serializing]: %s_Segment%d\t%v\n", uttID, nSegment, err)
@@ -542,13 +551,19 @@ func processResultsUtteranceJSON(fileResultsChannel <-chan outputs) error {
 				fmt.Fprintf(fileResults.outputWriter, "%s_%d\t%s\n", uttID, nSegment, string(str))
 			}
 		}
+		// Close files, but not stdout
+		if resultsPath != "-" {
+			fileResults.outputWriter.Close()
+		}
 	}
-
-	return nil
+	return count
 }
 
-func processResultsJSON(fileResultsChannel <-chan outputs, pretty bool) {
+func processResultsJSON(fileResultsChannel <-chan outputs, pretty bool) int {
+	count := 0
 	for fileResults := range fileResultsChannel {
+		count++ // Increment count
+
 		var bytes []byte
 		var err error
 
@@ -565,23 +580,33 @@ func processResultsJSON(fileResultsChannel <-chan outputs, pretty bool) {
 		} else {
 			fmt.Fprintf(os.Stderr, "Error serializing results: %v\n", err)
 		}
+
+		// Close files, but not stdout
+		if resultsPath != "-" {
+			fileResults.outputWriter.Close()
+		}
 	}
+	return count
 }
 
-func processResultsTimeline(fileResultsChannel <-chan outputs) {
+func processResultsTimeline(fileResultsChannel <-chan outputs) int {
+	count := 0
+
 	// Create formatter
 	cfg := timeline.Config{MaxAlternatives: maxAlternatives}
 	formatter, err := cfg.CreateFormatter()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Internal error creating timeline formatter: %v", err)
-		return
+		return 0
 	}
 
 	// Continues reading until the fileResultsChannel is closed
 	for fileResults := range fileResultsChannel {
+		count++ // Increment count
+
 		// Flatten the results, the formatter will separate out partials and empty results.
 		var all []*cubicpb.RecognitionResult
-		for _, resp := range fileResults.responses {
+		for _, resp := range fileResults.Responses {
 			all = append(all, resp...)
 		}
 
@@ -592,7 +617,13 @@ func processResultsTimeline(fileResultsChannel <-chan outputs) {
 			continue
 		}
 
-		// Format and print the results to the outputWriter
-		fmt.Fprintf(fileResults.outputWriter, "Timeline for '%s':\n%s\n\n", fileResults.uttID, output)
+		// Print the results to the outputWriter
+		fmt.Fprintf(fileResults.outputWriter, "Timeline for '%s':\n%s\n\n", fileResults.UttID, output)
+
+		// Close files, but not stdout
+		if resultsPath != "-" {
+			fileResults.outputWriter.Close()
+		}
 	}
+	return count
 }

@@ -395,7 +395,9 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 		case ".mp3":
 			audioEncoding = cubicpb.RecognitionConfig_MP3
 		case ".vox":
-			audioEncoding = cubicpb.RecognitionConfig_VOX8000
+			//TODO(julie): Should require them to specify the audio encoding
+			// for headerless formats, either as part of the call or in a config file
+			audioEncoding = cubicpb.RecognitionConfig_ULAW8000
 		case ".raw":
 			audioEncoding = cubicpb.RecognitionConfig_RAW_LINEAR16
 		default:
@@ -426,8 +428,6 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 			cfg.EnableWordConfidence = true
 			cfg.EnableWordTimeOffsets = true
 
-			//TODO(julie) Once we've updated cubicsvr so it can output formatted transcript and word-level features, remove this line
-			cfg.EnableRawTranscript = true
 		}
 
 		// Create and send the Streaming Recognize config

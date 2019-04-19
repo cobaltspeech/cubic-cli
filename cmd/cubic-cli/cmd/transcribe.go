@@ -155,20 +155,25 @@ var transcribeCmd = &cobra.Command{
 		// Check for overwritting an existing results file.
 		if resultsPath != "-" {
 			switch {
-			case listFile:
-				// In list file mode, we want either "-" or a valid folder.
+			case listFile && outputFormat != "utterance-json":
+				// In these modes, we want either "-" or a valid (existing) folder.
 				fi, err := os.Stat(resultsPath)
 				switch {
-				case err != nil:
-					return fmt.Errorf("Aborting: failed getting stats about --output: %v", err)
+				case err != nil: // File didn't exist
+					if os.IsNotExist(err) {
+						// We care about all errors, except the FileDoesntExist error.
+						// That would indicate it is safe to procced with the program as normal
+						return fmt.Errorf("Aborting: --output must me an existing directory: %v", err)
+					}
+
 				case !fi.Mode().IsDir():
-					return fmt.Errorf("Aborting because --output '%s' is not a directory", resultsPath)
+					return fmt.Errorf("Aborting: --output '%s' must me an existing directory", resultsPath)
 					// Note: Checking for existing `resultsPath/utteranceID_results.txt` files occures later
 					//       in the loadListFiles() function, once we read the list file contents.
 				}
 
-			case !listFile:
-				// In single file mode, we want either "-" or a non-existing file.
+			case true: // single file, OR utterance-json
+				// In these modes, we want either "-" or a non-existing file.
 				// Check to see if file exists
 				fi, err := os.Stat(resultsPath)
 				switch {
@@ -279,11 +284,11 @@ func transcribe() error {
 		fmt.Fprintf(os.Stderr, "Internal error: invalid outputFormat '%s'\n", outputFormat)
 	}
 
-	if resultsPath != "-" {
+	if resultsPath != "-" && nFilesWritten > 0 {
 		if listFile {
-			fmt.Printf("\nFinished writting %d results to folder '%s'!\n\n", nFilesWritten, resultsPath)
+			fmt.Printf("Finished writting %d results to folder '%s'!\n", nFilesWritten, resultsPath)
 		} else {
-			fmt.Printf("\nFinished writting results to file '%s'!\n\n", resultsPath)
+			fmt.Printf("Finished writting results to file '%s'!\n", resultsPath)
 		}
 	}
 
@@ -311,10 +316,19 @@ func getOutputWriter(path string) (io.WriteCloser, error) {
 		return os.Stdout, nil
 	}
 
+	// Check for parent folders not existing
+	basepath := filepath.Dir(path)
+	filename := filepath.Base(path)
+	if err := os.MkdirAll(basepath, 0755); err != nil {
+		return nil, fmt.Errorf("Failed to create parent folders for file '%s': %v", path, err)
+	}
+
 	// Create the file
-	file, err := os.Create(path)
+	// Note: if they pass in a dir such as `./results/nonexistingdir/`,
+	//       this will create a file at ./results/nonexistingdir/nonexistingdir`
+	file, err := os.Create(filepath.Join(basepath, filename))
 	if err != nil {
-		return nil, fmt.Errorf("Error opening output file: %v", err)
+		return nil, fmt.Errorf("Failed to open output file: %v", err)
 	}
 	return file, nil
 }
@@ -520,10 +534,14 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 		}
 
 		// Set up output file writer
-		outputWriter, err := getOutputWriter(input.outputPath)
-		if err != nil {
-			errChannel <- err
-			continue
+		var outputWriter io.WriteCloser
+		if outputFormat != "utterance-json" {
+			var err error
+			outputWriter, err = getOutputWriter(input.outputPath)
+			if err != nil {
+				errChannel <- err
+				continue
+			}
 		}
 
 		fileResultsChannel <- outputs{
@@ -539,25 +557,36 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 // processResultsUtteranceJSON returns the same results if it's single file or listfile, stdout or to a file.
 // Each entry is a line following the pattern `utterance_ID \t json_serialization_of_results`.
 func processResultsUtteranceJSON(fileResultsChannel <-chan outputs) int {
-	count := 0
-	for fileResults := range fileResultsChannel {
-		count++ // Increment file count
+	// Open the results file/stdout
+	outputWriter, err := getOutputWriter(resultsPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error opening output file: %v\n", err)
+		for fileResults := range fileResultsChannel {
+			_ = fileResults // Throw the results away
+		}
+		return 0
+	}
 
+	// Write each file's results to the file
+	for fileResults := range fileResultsChannel {
 		uttID := fileResults.UttID
 		response := fileResults.Responses
 		for nSegment, result := range response {
 			if str, err := json.Marshal(result); err != nil {
 				fmt.Fprintf(os.Stderr, "[Error serializing]: %s_Segment%d\t%v\n", uttID, nSegment, err)
 			} else {
-				fmt.Fprintf(fileResults.outputWriter, "%s_%d\t%s\n", uttID, nSegment, string(str))
+				fmt.Fprintf(outputWriter, "%s_%d\t%s\n", uttID, nSegment, string(str))
 			}
 		}
-		// Close files, but not stdout
-		if resultsPath != "-" {
-			fileResults.outputWriter.Close()
-		}
+		// No need to interact with fileResults.outputWriter, it should be nil.
 	}
-	return count
+
+	// Close the results file, but not stdout
+	if outputWriter != os.Stdout {
+		outputWriter.Close()
+	}
+
+	return 1 // This processResults function only writes to one file.
 }
 
 func processResultsJSON(fileResultsChannel <-chan outputs, pretty bool) int {
@@ -569,21 +598,32 @@ func processResultsJSON(fileResultsChannel <-chan outputs, pretty bool) int {
 		var err error
 
 		// Serialize the results
-		if pretty {
-			bytes, err = json.MarshalIndent(fileResults, "", "  ")
-		} else {
-			bytes, err = json.Marshal(fileResults)
+		if fileResults.outputWriter == os.Stdout { // Include UttID with results.
+			if pretty {
+				bytes, err = json.MarshalIndent(fileResults, "", "  ")
+			} else {
+				bytes, err = json.Marshal(fileResults)
+			}
+		} else { // Only include the results, exclude the UttID
+			if pretty {
+				bytes, err = json.MarshalIndent(fileResults.Responses, "", "  ")
+			} else {
+				bytes, err = json.Marshal(fileResults.Responses)
+			}
 		}
 
 		// Print results to outputWriter
 		if err == nil {
 			fmt.Fprint(fileResults.outputWriter, string(bytes))
+			if fileResults.outputWriter == os.Stdout {
+				fmt.Printf("\n") //Add a new line for each entry
+			}
 		} else {
 			fmt.Fprintf(os.Stderr, "Error serializing results: %v\n", err)
 		}
 
 		// Close files, but not stdout
-		if resultsPath != "-" {
+		if fileResults.outputWriter != os.Stdout {
 			fileResults.outputWriter.Close()
 		}
 	}
@@ -623,6 +663,9 @@ func processResultsTimeline(fileResultsChannel <-chan outputs) int {
 			fmt.Fprintf(fileResults.outputWriter, "Timeline for '%s':\n%s\n\n", fileResults.UttID, output)
 		} else { // When writing to a file, don't include the same header
 			fmt.Fprintf(fileResults.outputWriter, "%s", output)
+		}
+
+		if fileResults.outputWriter != os.Stdout {
 			fileResults.outputWriter.Close() // Close file.
 		}
 	}

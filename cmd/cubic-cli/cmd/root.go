@@ -80,7 +80,7 @@ func createClient() (*cubic.Client, error) {
 
 // verbosePrintf is a helper function.  Use --verbose to allow these strings to be printed
 func verbosePrintf(w io.Writer, format string, a ...interface{}) {
-	if verbose && w == os.Stderr {
+	if verbose {
 		fmt.Fprintf(w, "DEBUG: "+format, a...)
 	}
 }

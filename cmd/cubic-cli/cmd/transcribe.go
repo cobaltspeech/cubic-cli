@@ -22,7 +22,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 
@@ -190,13 +189,6 @@ var transcribeCmd = &cobra.Command{
 //   3. passes all audiofiles to the workers
 //   4. Collects the resulting transcription and outputs the results.
 func transcribe() error {
-
-	// Get output writter (file or stdout)
-	outputWriter, err := getOutputWriter(resultsFile)
-	if err != nil {
-		return err
-	}
-
 	// Setup channels for communicating between the various goroutines
 	fileChannel := make(chan inputs)
 	fileResultsChannel := make(chan outputs)
@@ -226,26 +218,42 @@ func transcribe() error {
 	startWorkers(client, fileChannel, fileResultsChannel, errChannel)
 
 	// Handle errors
-	errCount := 0
-	wg := sync.WaitGroup{}
-	wg.Add(1)
 	go func() {
+		errCount := 0
 		verbosePrintf(os.Stdout, "Watching for errors during process.\n")
-		for err := range errChannel {
+		for err := range errChannel { // Block until the channel closes
 			errCount++
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 		}
-		wg.Done()
+		if errCount > 0 {
+			fmt.Fprintf(os.Stderr, "-----------\nThere were a total of %d failed files.\n", errCount)
+		}
 	}()
 
-	// Deal with the transcription results
-	processResults(outputWriter, fileResultsChannel)
-
-	wg.Wait()
-
-	if errCount > 0 {
-		fmt.Fprintf(os.Stderr, "-----------\nThere were a total of %d failed files.\n", errCount)
+	// Get output writter (file or stdout)
+	outputWriter, err := getOutputWriter(resultsFile)
+	if err != nil {
+		return err
 	}
+
+	// Deal with the transcription results
+	switch outputFormat {
+	case "utterance-json":
+		processResultsUtteranceJSON(outputWriter, fileResultsChannel)
+	case "json":
+		processResultsJSON(outputWriter, fileResultsChannel, false)
+	case "json-pretty":
+		processResultsJSON(outputWriter, fileResultsChannel, true)
+	case "timeline":
+		processResultsTimeline(outputWriter, fileResultsChannel)
+	default:
+		fmt.Fprintf(os.Stderr, "Internal error: invalid outputFormat '%s'\n", outputFormat)
+	}
+
+	if resultsFile != "-" {
+		fmt.Printf("\nFinished writting results to file '%s'!\n\n", resultsFile)
+	}
+
 	return nil
 }
 
@@ -454,7 +462,21 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 	wg.Done()
 }
 
-func processResults(outputWriter io.Writer, fileResultsChannel <-chan outputs) {
+func processResultsUtteranceJSON(outputWriter io.Writer, fileResultsChannel <-chan outputs) {
+	for fileResults := range fileResultsChannel {
+		uttID := fileResults.uttID
+		response := fileResults.responses
+		for nSegment, result := range response {
+			if str, err := json.Marshal(result); err != nil {
+				fmt.Fprintf(os.Stderr, "[Error serializing]: %s_Segment%d\t%v\n", uttID, nSegment, err)
+			} else {
+				fmt.Fprintf(outputWriter, "%s_%d\t%s\n", uttID, nSegment, string(str))
+			}
+		}
+	}
+}
+
+func processResultsJSON(outputWriter io.Writer, fileResultsChannel <-chan outputs, pretty bool) {
 	// Keep a list of all non-partial results.  Cache them until all results have been recieved.
 	finalResults := make(map[string][]*cubicpb.RecognitionResult)
 
@@ -469,69 +491,45 @@ func processResults(outputWriter io.Writer, fileResultsChannel <-chan outputs) {
 		}
 	}
 
-	// Sort the uttIDs for consistancy between runs.
-	var uttIDs []string
-	for k := range finalResults {
-		uttIDs = append(uttIDs, k)
+	// Serialize the results
+	var bytes []byte
+	var err error
+	if pretty {
+		bytes, err = json.MarshalIndent(finalResults, "", "  ")
+	} else {
+		bytes, err = json.Marshal(finalResults)
 	}
-	sort.Strings(uttIDs)
 
-	// Write formatted results to the outputWritter.
-	switch outputFormat {
-	case "utterance-json":
-		for _, uttID := range uttIDs {
-			segments, ok := finalResults[uttID]
-			if !ok {
-				fmt.Fprintf(os.Stderr, "Internal error: invalid uttID '%s'\n", uttID)
-			} else {
-				for nSegment, result := range segments {
-					if str, err := json.Marshal(result); err != nil {
-						fmt.Fprintf(os.Stderr, "[Error serializing]: %s_Segment%d\t%v\n", uttID, nSegment, err)
-					} else {
-						fmt.Fprintf(outputWriter, "%s_%d\t%s\n", uttID, nSegment, string(str))
-					}
-				}
-			}
+	// Print results to outputWritter
+	if err == nil {
+		fmt.Fprint(outputWriter, string(bytes))
+	} else {
+		fmt.Fprintf(os.Stderr, "Error serializing results: %v\n", err)
+	}
+}
+
+func processResultsTimeline(outputWriter io.Writer, fileResultsChannel <-chan outputs) {
+	// Create formatter
+	cfg := timeline.Config{MaxAlternatives: maxAlternatives}
+	formatter, err := cfg.CreateFormatter()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Internal error creating timeline formatter: %v", err)
+		return
+	}
+
+	// Append every non-partial result to list.  Continues reading until the channel is closed.
+	for result := range fileResultsChannel {
+		var all []*cubicpb.RecognitionResult
+		for _, resp := range result.responses {
+			all = append(all, resp...)
 		}
-	case "json":
-		if str, err := json.Marshal(finalResults); err == nil {
-			fmt.Fprint(outputWriter, string(str))
-		} else {
-			fmt.Fprintf(os.Stderr, "Error serializing results: %v\n", err)
-		}
-	case "json-pretty":
-		if str, err := json.MarshalIndent(finalResults, "", "  "); err == nil {
-			fmt.Fprint(outputWriter, string(str))
-		} else {
-			fmt.Fprintf(os.Stderr, "Error serializing results: %v\n", err)
-		}
-	case "timeline":
-		cfg := timeline.Config{MaxAlternatives: maxAlternatives}
-		formatter, err := cfg.CreateFormatter()
+
+		// Format the results
+		output, err := formatter.Format(all)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Internal error creating timeline formatter: %v", err)
-			return
+			fmt.Fprintf(os.Stderr, "Formatting results: %v", err)
+		} else {
+			fmt.Fprintf(outputWriter, "Timeline for '%s':\n%s\n\n", result.uttID, output)
 		}
-		for _, uttID := range uttIDs {
-			if results, ok := finalResults[uttID]; !ok {
-				fmt.Fprintf(os.Stderr, "Internal error: invalid uttID '%s'\n", uttID)
-			} else {
-				output, err := formatter.Format(results)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Formatting results: %v", err)
-					return
-				}
-				if len(uttIDs) > 1 {
-					fmt.Fprintf(outputWriter, "Timeline for '%s':\n\n", uttID)
-				}
-				fmt.Fprintln(outputWriter, output)
-			}
-		}
-	default:
-		fmt.Fprintf(os.Stderr, "Internal error: invalid outputFormat '%s'\n", outputFormat)
-	}
-
-	if resultsFile != "-" {
-		fmt.Printf("\nFinished writting results to file '%s'!\n\n", resultsFile)
 	}
 }

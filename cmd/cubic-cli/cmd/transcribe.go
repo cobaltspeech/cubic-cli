@@ -395,7 +395,7 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 		case ".mp3":
 			audioEncoding = cubicpb.RecognitionConfig_MP3
 		case ".vox":
-			audioEncoding = cubicpb.RecognitionConfig_VOX8000
+			audioEncoding = cubicpb.RecognitionConfig_ULAW8000
 		case ".raw":
 			audioEncoding = cubicpb.RecognitionConfig_RAW_LINEAR16
 		default:

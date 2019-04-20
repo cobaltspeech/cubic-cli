@@ -517,7 +517,10 @@ func processResults(outputWriter io.Writer, resultsChannel <-chan outputs) {
 					fmt.Fprintf(os.Stderr, "Formatting results: %v", err)
 					return
 				}
-				fmt.Fprintf(outputWriter, "Timeline for '%s':\n%s\n\n", uttID, output)
+				if len(uttIDs) > 1 {
+					fmt.Fprintf(outputWriter, "Timeline for '%s':\n\n", uttID)
+				}
+				fmt.Fprintln(outputWriter, output)
 			}
 		}
 	default:

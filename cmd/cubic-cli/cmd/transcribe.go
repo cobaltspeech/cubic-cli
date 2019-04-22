@@ -152,46 +152,6 @@ var transcribeCmd = &cobra.Command{
 		}
 		inputFile = args[0]
 
-		// Check for overwritting an existing results file.
-		if resultsPath != "-" {
-			switch {
-			case listFile && outputFormat != "utterance-json":
-				// In these modes, we want either "-" or a valid (existing) folder.
-				fi, err := os.Stat(resultsPath)
-				switch {
-				case err != nil: // File didn't exist
-					if os.IsNotExist(err) {
-						// We care about all errors, except the FileDoesntExist error.
-						// That would indicate it is safe to procced with the program as normal
-						return fmt.Errorf("Aborting: --output must me an existing directory: %v", err)
-					}
-
-				case !fi.Mode().IsDir():
-					return fmt.Errorf("Aborting: --output '%s' must me an existing directory", resultsPath)
-					// Note: Checking for existing `resultsPath/utteranceID_results.txt` files occures later
-					//       in the loadListFiles() function, once we read the list file contents.
-				}
-
-			case true: // single file, OR utterance-json
-				// In these modes, we want either "-" or a non-existing file.
-				// Check to see if file exists
-				fi, err := os.Stat(resultsPath)
-				switch {
-				case err != nil:
-					if !os.IsNotExist(err) {
-						// We care about all errors, except the FileDoesntExist error.
-						// That would indicate it is safe to procced with the program as normal
-						return fmt.Errorf("Error while checking for existing --output: %v", err)
-					}
-				case fi.IsDir():
-					return fmt.Errorf("Aborting because --output '%s' is a directory, not a file", resultsPath)
-				case err == nil:
-					// Else, the file exists, since it didn't throw an error, so explain why we are quitting
-					return fmt.Errorf("Aborting because --output '%s' already exists", resultsPath)
-				}
-			}
-		}
-
 		// Make sure outputFormat is a valid option.
 		switch outputFormat {
 		case "json": // Do nothing
@@ -200,6 +160,49 @@ var transcribeCmd = &cobra.Command{
 		case "timeline": // Do nothing
 		default:
 			return fmt.Errorf("invalid option for outputFormat: '%v'", outputFormat)
+		}
+
+		// utterance-json must print to stdout
+		if outputFormat == "utterance-json" && resultsPath != "-" {
+			return fmt.Errorf("Aborting: --outputFormat utterance-json can only write to stdout")
+		}
+
+		// Check for overwritting an existing results file.
+		if resultsPath != "-" {
+			isFolder, isFile, exists, err := statsPath(resultsPath)
+			if err != nil {
+				return fmt.Errorf("Error while checkout --output destination: %v", err)
+			}
+
+			if listFile {
+				// --output needs to be a valid (existing) folder.
+				if !exists {
+					return fmt.Errorf("Aborting: --output must be an existing directory: %v", resultsPath)
+				}
+				if isFile {
+					return fmt.Errorf("Aborting: --output must be a directory: %v", resultsPath)
+				}
+				verbosePrintf(os.Stdout, "listFile seems to have a valid --output folder.\n")
+			} else {
+				// --output needs to be a non-existing file, with an existing parent folder.
+				if isFolder {
+					// Existing or not, it can't be a folder.
+					return fmt.Errorf("Aborting because --output '%s' is a directory, not a file", resultsPath)
+				} else if isFile {
+					if exists {
+						return fmt.Errorf("Aborting because --output '%s' already exists", resultsPath)
+					}
+					// Check parent dir exists
+					isFolder, _, exists, err := statsPath(filepath.Dir(resultsPath))
+					if err != nil {
+						return fmt.Errorf("Error while checkout --output destination: %v", err)
+					}
+					if !isFolder || !exists {
+						return fmt.Errorf("Aborting because folder '%s' doesn't exist", filepath.Dir(resultsPath))
+					}
+					verbosePrintf(os.Stdout, "!listFile, && isFile: seemes to have a valid --output file, with existing parent dir\n")
+				}
+			}
 		}
 
 		// Set up audioChannels
@@ -214,6 +217,20 @@ var transcribeCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return transcribe()
 	},
+}
+
+func statsPath(path string) (isFolder, isFile, exists bool, err error) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// See if it should be a file or folder
+			isFolder := strings.HasSuffix(path, string(filepath.Separator))
+			return isFolder, !isFolder, false, nil
+		}
+		return false, false, false, err
+	}
+	mode := fi.Mode()
+	return mode.IsDir(), mode.IsRegular(), true, nil
 }
 
 // transcribe is the main function.
@@ -316,17 +333,8 @@ func getOutputWriter(path string) (io.WriteCloser, error) {
 		return os.Stdout, nil
 	}
 
-	// Check for parent folders not existing
-	basepath := filepath.Dir(path)
-	filename := filepath.Base(path)
-	if err := os.MkdirAll(basepath, 0755); err != nil {
-		return nil, fmt.Errorf("Failed to create parent folders for file '%s': %v", path, err)
-	}
-
 	// Create the file
-	// Note: if they pass in a dir such as `./results/nonexistingdir/`,
-	//       this will create a file at ./results/nonexistingdir/nonexistingdir`
-	file, err := os.Create(filepath.Join(basepath, filename))
+	file, err := os.Create(path)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to open output file: %v", err)
 	}

@@ -314,19 +314,6 @@ func transcribe() error {
 	return nil
 }
 
-func checkFileExists(path string) error {
-	// Check for existing file
-	if _, err := os.Stat(path); err == nil {
-		// The file exists, since it didn't throw an error, so explain why we are quitting
-		return fmt.Errorf("file '%s' already exists", path)
-	} else if !os.IsNotExist(err) {
-		// We care about all errors, except the FileDoesntExist error.
-		// That would indicate it is safe to procced with the program as normal
-		return fmt.Errorf("error while checking for existing file '%s': %v", path, err)
-	}
-	return nil
-}
-
 // Get a reference to output/stdout, depending on the input of
 func getOutputWriter(path string) (io.WriteCloser, error) {
 	if path == "-" {
@@ -410,8 +397,10 @@ func loadListFiles(path string) ([]inputs, error) {
 		var outputPath = "-"
 		if resultsPath != "-" {
 			outputPath = filepath.Join(resultsPath, id+"_results.txt")
-			if err := checkFileExists(outputPath); err != nil {
+			if _, isFile, exists, err := statsPath(outputPath); err != nil {
 				return nil, fmt.Errorf("Failed setting up a results file: %v", err)
+			} else if isFile && exists {
+				return nil, fmt.Errorf("Error: Results file '%s' already exists", outputPath)
 			}
 		}
 
@@ -565,16 +554,6 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 // processResultsUtteranceJSON returns the same results if it's single file or listfile, stdout or to a file.
 // Each entry is a line following the pattern `utterance_ID \t json_serialization_of_results`.
 func processResultsUtteranceJSON(fileResultsChannel <-chan outputs) int {
-	// Open the results file/stdout
-	outputWriter, err := getOutputWriter(resultsPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error opening output file: %v\n", err)
-		for fileResults := range fileResultsChannel {
-			_ = fileResults // Throw the results away
-		}
-		return 0
-	}
-
 	// Write each file's results to the file
 	for fileResults := range fileResultsChannel {
 		uttID := fileResults.UttID
@@ -583,17 +562,10 @@ func processResultsUtteranceJSON(fileResultsChannel <-chan outputs) int {
 			if str, err := json.Marshal(result); err != nil {
 				fmt.Fprintf(os.Stderr, "[Error serializing]: %s_Segment%d\t%v\n", uttID, nSegment, err)
 			} else {
-				fmt.Fprintf(outputWriter, "%s_%d\t%s\n", uttID, nSegment, string(str))
+				fmt.Fprintf(os.Stdout, "%s_%d\t%s\n", uttID, nSegment, string(str))
 			}
 		}
-		// No need to interact with fileResults.outputWriter, it should be nil.
 	}
-
-	// Close the results file, but not stdout
-	if outputWriter != os.Stdout {
-		outputWriter.Close()
-	}
-
 	return 1 // This processResults function only writes to one file.
 }
 

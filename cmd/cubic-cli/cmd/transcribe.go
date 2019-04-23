@@ -393,7 +393,7 @@ func loadListFiles(path string) ([]inputs, error) {
 			}
 		}
 
-		// Generate an outputWriter for each file
+		// Generate an output file for each input file
 		var outputPath = "-"
 		if resultsPath != "-" {
 			outputPath = filepath.Join(resultsPath, id+"_results.txt")
@@ -509,7 +509,6 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 		if outputFormat == "timeline" {
 			cfg.EnableWordConfidence = true
 			cfg.EnableWordTimeOffsets = true
-
 		}
 
 		// create buffer for file's results

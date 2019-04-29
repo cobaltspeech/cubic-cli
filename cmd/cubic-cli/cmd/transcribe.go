@@ -63,18 +63,18 @@ func init() {
 
 	transcribeCmd.Flags().BoolVarP(&listFile, "list-file", "l", false, ""+
 		"When true, the FILE_PATH is pointing to a file containing a list of \n"+
-		"\"UtteranceID \\t path/to/audio.wav\", one entry per line.")
+		"  \"UtteranceID \\t path/to/audio.wav\", one entry per line.")
 
 	transcribeCmd.Flags().StringVarP(&resultsPath, "output", "o", "-", ""+
 		"Path to where the results should be written to.\n"+
-		"In single file mode, this path should be a file.\n"+
-		"In list file mode, this path should be a directory.  Each file processed will\n"+
-		"  have a separate output file, using the imput file's name, with a .txt extention.\n"+
-		"\"-\" indicates stdout in either case.  In list file mode, each entry will be \n"+
-		"  prefaced by the utterance ID and have an extra newline seperating it from the next. ")
+		"This path should be a directory.\n"+
+		"In --list-file mode, each file processed will have a separate output file, \n"+
+		"  using the utteranceID as the filename with a \".txt\" extention.\n"+
+		"\"-\" indicates stdout in either case.  In --list-file mode, each entry will be \n"+
+		"  prefaced by the utterance ID and have an extra newline seperating it from the next.")
 
 	transcribeCmd.Flags().StringVarP(&outputFormat, "outputFormat", "f", "timeline",
-		"Format of output.  Can be [json,utterance-json,json-pretty,timeline].")
+		"Format of output.  Can be [json,json-pretty,timeline,utterance-json].")
 
 	transcribeCmd.Flags().IntSliceVarP(&audioChannels, "audioChannels", "c", []int{}, ""+
 		"Audio channels to transcribe.  Defaults to mono.\n"+
@@ -84,19 +84,20 @@ func init() {
 		"Overrides --stereo if both are included.")
 
 	transcribeCmd.Flags().BoolVar(&audioChannelsStereo, "stereo", false, ""+
-		"Sets --audioChannels \"0,1\" which transcribes both audio channels of a stereo file.\n"+
+		"Sets --audioChannels \"0,1\" to transcribe both audio channels of a stereo file.\n"+
 		"If --audioChannels is set, this flag is ignored.")
 
 	transcribeCmd.Flags().IntVarP(&nConcurrentRequests, "workers", "n", 1, ""+
 		"Number of concurrent requests to send to cubicsvr.\n"+
-		"Please note, while this value is defined client-side the performance \n"+
-		"will be limited by the available computational ability of the server.  \n"+
-		"If you are the only connection to an 8-core server, then \"-n 8\" is a \n"+
-		"reasonable value.  A lower number is suggested if there are multiple \n"+
+		"Please note, while this value is defined client-side the performance\n"+
+		"will be limited by the available computational ability of the server.\n"+
+		"If you are the only connection to an 8-core server, then \"-n 8\" is a\n"+
+		"reasonable value.  A lower number is suggested if there are multiple\n"+
 		"clients connecting to the same machine.")
 
-	transcribeCmd.Flags().IntVarP(&maxAlternatives, "fmt.timeline.maxAlts", "a", 1,
-		"Maximum number of alternatives to provide for each result, if the outputFormat includes alternatives (such as 'timeline').")
+	transcribeCmd.Flags().IntVarP(&maxAlternatives, "fmt.timeline.maxAlts", "a", 1, ""+
+		"Maximum number of alternatives to provide for each result, if the outputFormat\n"+
+		"includes alternatives (such as 'timeline').")
 
 }
 
@@ -125,8 +126,8 @@ The file extension (wav, flac, mp3, vox, raw) will be used to determine which
 Summary of "--outputFormat" options:
     * json           - json of map[uttID][]Results.
     * json-pretty    - json of map[uttID][]Results, prettified with newlines and indents.
-    * utterance-json - "UttID_SegID \t json of a single Result", grouped by UttID.
     * timeline       - "start_time|channel_id|1best transcript", grouped by UttID.
+    * utterance-json - "UttID_SegID \t json of a single Result", grouped by UttID.
 
 See "transcribe --help" for details on the other flags.`
 

@@ -40,10 +40,9 @@ type inputs struct {
 
 type outputs struct {
 	UttID        string
-	Responses    []responseResults
+	Responses    []*cubicpb.RecognitionResult
 	outputWriter io.WriteCloser
 }
-type responseResults []*cubicpb.RecognitionResult
 
 // Argument variables.
 var model string
@@ -174,35 +173,15 @@ var transcribeCmd = &cobra.Command{
 				return fmt.Errorf("Error accessing --output '%s': %v", resultsPath, err)
 			}
 
-			if listFile {
-				// --output needs to be a valid (existing) folder.
-				if !exists {
-					return fmt.Errorf("Aborting: --output must be an existing directory: %v", resultsPath)
-				}
-				if !isFolder {
-					return fmt.Errorf("Aborting: --output must be a directory: %v", resultsPath)
-				}
-				verbosePrintf(os.Stdout, "listFile seems to have a valid --output folder.\n")
-			} else {
-				// --output needs to be a non-existing file, with an existing parent folder.
-				if isFolder {
-					// Existing or not, it can't be a folder.
-					return fmt.Errorf("Aborting because --output '%s' is a directory, not a file", resultsPath)
-				} else if !isFolder {
-					if exists {
-						return fmt.Errorf("Aborting because --output '%s' already exists", resultsPath)
-					}
-					// Check parent dir exists
-					isFolder, exists, err := statsPath(filepath.Dir(resultsPath))
-					if err != nil {
-						return fmt.Errorf("Error accessing --output '%s': %v", resultsPath, err)
-					}
-					if !isFolder || !exists {
-						return fmt.Errorf("Aborting because folder '%s' doesn't exist", filepath.Dir(resultsPath))
-					}
-					verbosePrintf(os.Stdout, "--output file seems valid, with existing parent dir.\n")
-				}
+			// --output needs to be a valid (existing) folder.
+			if !exists {
+				return fmt.Errorf("Aborting: --output must be an existing directory: %v", resultsPath)
 			}
+			if !isFolder {
+				return fmt.Errorf("Aborting: --output must be a directory: %v", resultsPath)
+			}
+
+			// Checking for individual files happens later
 		}
 
 		// Set up audioChannels
@@ -336,10 +315,22 @@ func loadFiles(path string) ([]inputs, error) {
 }
 
 func loadSingleFile(path string) ([]inputs, error) {
+	// Generate an output filepath for the input file
+	var outputPath = "-"
+	if resultsPath != "-" {
+		outputPath = filepath.Join(resultsPath, filepath.Base(path)+".txt")
+		if isFolder, exists, err := statsPath(outputPath); err != nil {
+			return nil, fmt.Errorf("Failed setting up a results file: %v", err)
+		} else if !isFolder && exists {
+			return nil, fmt.Errorf("Error: Results file '%s' already exists", outputPath)
+		}
+	}
+
 	return []inputs{
 		inputs{
+			uttID:      filepath.Base(path),
 			filepath:   path,
-			outputPath: resultsPath, // Already checked for existing output file.
+			outputPath: outputPath, // Already checked for existing output file.
 		},
 	}, nil
 }
@@ -510,14 +501,14 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 		}
 
 		// create buffer for file's results
-		var fileResponses []responseResults
+		var fileResponses []*cubicpb.RecognitionResult
 		// Create and send the Streaming Recognize config
 		err = client.StreamingRecognize(context.Background(),
 			cfg,
 			audio, // The audio file to send
 			func(response *cubicpb.RecognitionResponse) { // The callback for results
 				verbosePrintf(os.Stdout, "Worker%2d recieved result segment #%d for Utterance '%s'.\n", workerID, segmentID, input.uttID)
-				fileResponses = append(fileResponses, response.Results)
+				fileResponses = append(fileResponses, response.Results...)
 				segmentID++
 			})
 
@@ -548,8 +539,11 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 	wg.Done()
 }
 
-// processResultsUtteranceJSON returns the same results if it's single file or listfile, stdout or to a file.
-// Each entry is a line following the pattern `utterance_ID \t json_serialization_of_results`.
+// processResultsUtteranceJSON returns a line for each entry in the format of:
+//     {utteranceID}_{segment#} \t {json_serialization_of_results}
+// --output must be "-" (stdout).
+// The order of segments for a given utterance will be chronological.
+// There is no guarantee for the order of utteranceIDs, as results are printed as soon as the file is completed.
 func processResultsUtteranceJSON(fileResultsChannel <-chan outputs) int {
 	// Write each file's results to the file
 	for fileResults := range fileResultsChannel {
@@ -622,14 +616,8 @@ func processResultsTimeline(fileResultsChannel <-chan outputs) int {
 	for fileResults := range fileResultsChannel {
 		count++ // Increment file count
 
-		// Flatten the results, the formatter will separate out partials and empty results.
-		var all []*cubicpb.RecognitionResult
-		for _, resp := range fileResults.Responses {
-			all = append(all, resp...)
-		}
-
 		// Format the results
-		output, err := formatter.Format(all)
+		output, err := formatter.Format(fileResults.Responses)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error while formatting results: %v", err)
 			continue

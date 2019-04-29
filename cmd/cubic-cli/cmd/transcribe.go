@@ -208,8 +208,7 @@ func statsPath(path string) (isFolder, exists bool, err error) {
 		}
 		return false, false, err
 	}
-	mode := fi.Mode()
-	return mode.IsDir(), true, nil
+	return fi.Mode().IsDir(), true, nil
 }
 
 // transcribe is the main function.

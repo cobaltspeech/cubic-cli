@@ -169,9 +169,9 @@ var transcribeCmd = &cobra.Command{
 
 		// Check for overwritting an existing results file.
 		if resultsPath != "-" {
-			isFolder, isFile, exists, err := statsPath(resultsPath)
+			isFolder, exists, err := statsPath(resultsPath)
 			if err != nil {
-				return fmt.Errorf("Error while checkout --output destination: %v", err)
+				return fmt.Errorf("Error accessing --output '%s': %v", resultsPath, err)
 			}
 
 			if listFile {
@@ -179,7 +179,7 @@ var transcribeCmd = &cobra.Command{
 				if !exists {
 					return fmt.Errorf("Aborting: --output must be an existing directory: %v", resultsPath)
 				}
-				if isFile {
+				if !isFolder {
 					return fmt.Errorf("Aborting: --output must be a directory: %v", resultsPath)
 				}
 				verbosePrintf(os.Stdout, "listFile seems to have a valid --output folder.\n")
@@ -188,19 +188,19 @@ var transcribeCmd = &cobra.Command{
 				if isFolder {
 					// Existing or not, it can't be a folder.
 					return fmt.Errorf("Aborting because --output '%s' is a directory, not a file", resultsPath)
-				} else if isFile {
+				} else if !isFolder {
 					if exists {
 						return fmt.Errorf("Aborting because --output '%s' already exists", resultsPath)
 					}
 					// Check parent dir exists
-					isFolder, _, exists, err := statsPath(filepath.Dir(resultsPath))
+					isFolder, exists, err := statsPath(filepath.Dir(resultsPath))
 					if err != nil {
-						return fmt.Errorf("Error while checkout --output destination: %v", err)
+						return fmt.Errorf("Error accessing --output '%s': %v", resultsPath, err)
 					}
 					if !isFolder || !exists {
 						return fmt.Errorf("Aborting because folder '%s' doesn't exist", filepath.Dir(resultsPath))
 					}
-					verbosePrintf(os.Stdout, "!listFile, && isFile: seemes to have a valid --output file, with existing parent dir\n")
+					verbosePrintf(os.Stdout, "--output file seems valid, with existing parent dir.\n")
 				}
 			}
 		}
@@ -219,18 +219,18 @@ var transcribeCmd = &cobra.Command{
 	},
 }
 
-func statsPath(path string) (isFolder, isFile, exists bool, err error) {
+func statsPath(path string) (isFolder, exists bool, err error) {
 	fi, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// See if it should be a file or folder
 			isFolder := strings.HasSuffix(path, string(filepath.Separator))
-			return isFolder, !isFolder, false, nil
+			return isFolder, false, nil
 		}
-		return false, false, false, err
+		return false, false, err
 	}
 	mode := fi.Mode()
-	return mode.IsDir(), mode.IsRegular(), true, nil
+	return mode.IsDir(), true, nil
 }
 
 // transcribe is the main function.
@@ -323,7 +323,7 @@ func getOutputWriter(path string) (io.WriteCloser, error) {
 	// Create the file
 	file, err := os.Create(path)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to open output file: %v", err)
+		return nil, fmt.Errorf("Failed to create output file: %v", err)
 	}
 	return file, nil
 }
@@ -338,7 +338,6 @@ func loadFiles(path string) ([]inputs, error) {
 func loadSingleFile(path string) ([]inputs, error) {
 	return []inputs{
 		inputs{
-			uttID:      "utt_0",
 			filepath:   path,
 			outputPath: resultsPath, // Already checked for existing output file.
 		},
@@ -396,10 +395,10 @@ func loadListFiles(path string) ([]inputs, error) {
 		// Generate an output file for each input file
 		var outputPath = "-"
 		if resultsPath != "-" {
-			outputPath = filepath.Join(resultsPath, id+"_results.txt")
-			if _, isFile, exists, err := statsPath(outputPath); err != nil {
+			outputPath = filepath.Join(resultsPath, id+".txt")
+			if isFolder, exists, err := statsPath(outputPath); err != nil {
 				return nil, fmt.Errorf("Failed setting up a results file: %v", err)
-			} else if isFile && exists {
+			} else if !isFolder && exists {
 				return nil, fmt.Errorf("Error: Results file '%s' already exists", outputPath)
 			}
 		}
@@ -483,9 +482,8 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 		case ".raw":
 			audioEncoding = cubicpb.RecognitionConfig_RAW_LINEAR16
 		default:
-			errChannel <- fmt.Errorf("skipping utterance %q: unknown file extension %q", input.uttID, ext)
+			errChannel <- fmt.Errorf("skipping utterance '%s': unknown file extension %s", input.uttID, ext)
 			continue
-
 		}
 		// Counter for segments
 		segmentID := 0

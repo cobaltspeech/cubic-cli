@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Cubic Command Line Interface -- Cobalt</title>
+    
+      <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Output formats :: Cubic Command Line Interface -- Cobalt</title>
+<link rel="shortcut icon" href="/cubic-cli/images/favicon.ico" type="image/x-icon" />
+<link href="/cubic-cli/css/nucleus.css" rel="stylesheet">
+<link href="/cubic-cli/css/font-awesome.min.css" rel="stylesheet">
+<link href="/cubic-cli/css/hybrid.css" rel="stylesheet">
+<link href="/cubic-cli/css/featherlight.min.css" rel="stylesheet">
+<link href="/cubic-cli/css/auto-complete.css" rel="stylesheet">
+<link href="/cubic-cli/theme-original/style.css" rel="stylesheet">
+
+  <link href="/cubic-cli/theme-original/variant-blue.css" rel="stylesheet">
+
+<link rel="stylesheet" href="/cubic-cli/css/bootstrap.min.css">
+<script src="/cubic-cli/js/jquery-2.x.min.js"></script>
+<style type="text/css">
+  :root #header + #content > #left > #rlblock_left {
+    display:none !important;
+  }
+</style>
+<link href="/cubic-cli/css/tabs.css" rel="stylesheet" type="text/css">
+<script src="/cubic-cli/js/tabs.js"></script>
+
+
+    
+  </head>
+  <body data-url="/cubic-cli/formats/">
+    
+      <div id="headermain"></div>
+<nav id="sidebar" class="showVisitedLinks">
+
+
+
+<div class="highlightable">
+  <div id="header-wrapper">
+    <div id="header">
+      
+	
+  
+    <p><img src="/sdk-cubic/images/logo-white.png" alt="Cobalt's CLI Documentation" /></p>
+
+<p>Cubic Command Line Interface &ndash; Cobalt</p>
+
+  
+
+
+    </div>
+        <div class="searchbox">
+		    <label for="search-by"><i class="fa fa-search"></i></label>
+		    <input data-search-input id="search-by" type="text" placeholder="Search...">
+		    <span data-search-clear=""><i class="fa fa-close"></i></span>
+		</div>
+		<script type="text/javascript" src="/cubic-cli/js/lunr.min.js"></script>
+		<script type="text/javascript" src="/cubic-cli/js/auto-complete.js"></script>
+		<script type="text/javascript">
+        
+            var baseurl = "https:\/\/cobaltspeech.github.io\/cubic-cli";
+        
+		</script>
+		<script type="text/javascript" src="/cubic-cli/js/search.js"></script>
+  </div>
+
+      <ul class="topics">
+            <li data-nav-id="/cubic-cli/" class="dd-item">
+            <a href="/cubic-cli/"><i class="fa fa-fw fa-home"></i></a>
+            </li>
+
+
+
+        <section id="shortcuts">
+                <li class="" role=""><h3>More</h3><a href="https://github.com/cobaltspeech/cubic-cli" target="_blank" rel="noopener"><i class='fa fa-github'></i> <label>Github repo</label></a></li>
+                <li class="" role=""><a href="https://www.cobaltspeech.com/contact" target="_blank" rel="noopener"><i class='fa fa-bookmark'></i> <label>Contact us</label></a></li>
+        </section>
+            <a id="clear-history" class="" href="#" data-clear-history-toggle=""><i class="fa  fa-history"></i> Clear History</a>
+
+    <hr />
+    <li></li>
+    
+    </ul>
+
+ <section id="footer">
+    </section>
+  </div>
+</nav>
+
+
+
+<section id="body">
+<div id="overlay"></div>
+<div class="padding highlightable">
+
+  <div id="top-bar">
+    <div id="breadcrumbs" itemscope="" itemtype="http://data-vocabulary.org/Breadcrumb">
+        <span id="sidebar-toggle-span">
+          <a href="#" id="sidebar-toggle" data-sidebar-toggle="">
+            <i class="fa fa-bars"></i>
+          </a>
+        </span>
+        <span id="toc-menu"><i class="fa fa-list-alt"></i></span>
+        <span class="links">
+        
+
+
+
+
+ <a href='/cubic-cli/'>Command-line interface</a> > Output formats
+
+ 
+
+   
+        </span>
+    </div>
+    
+    
+    <div class="progress">
+        <div class="wrapper">
+    <nav id="TableOfContents">
+<ul>
+<li>
+<ul>
+<li><a href="#timeline">Timeline</a>
+<ul>
+<li><a href="#fields">Fields</a></li>
+<li><a href="#example">Example</a></li>
+</ul></li>
+<li><a href="#json-and-json-pretty">Json and Json-pretty</a>
+<ul>
+<li><a href="#example-1">Example</a></li>
+</ul></li>
+<li><a href="#utterance-json">Utterance-json</a>
+<ul>
+<li><a href="#example-2">Example</a></li>
+</ul></li>
+</ul></li>
+</ul>
+</nav>
+        </div>
+    </div>
+    
+
+  </div>
+
+
+<div id="body-inner">
+  
+    <h1>Output formats</h1>
+  
+
+
+
+    
+    
+    
+    <p>There are four different output options supported:</p>
+
+<ul>
+<li><a href="#timeline">timeline</a></li>
+<li><a href="#json-and-json-pretty">json</a></li>
+<li><a href="#json-and-json-pretty">json-pretty</a></li>
+<li><a href="#utterance-json">utterance-json</a></li>
+</ul>
+
+<p>All the output options return a list of JSON representations of each result recognized in the
+transcript. Cubic can be configured with different endpoint settings to determine how long a
+pause between words will begin a new result; the default is half a second.</p>
+
+<h2 id="timeline">Timeline</h2>
+
+<p>Timeline is the default output format. For multi-channel audio, it sorts the results from different channels by their start times, showing the conversation in order.</p>
+
+<h3 id="fields">Fields</h3>
+
+<ul>
+<li><strong>channel_id</strong>: Which channel produced the results</li>
+<li><strong>nbest</strong>: The alternatives recognized for each result.  By default, only the most likely alternative is returned for each result.  Specify <code>--fmt.timeline.maxAlts</code> to include additional, lower confidence, results.
+
+<ul>
+<li><strong>start_time</strong>: Number of milliseconds since the beginning of the audio file</li>
+<li><strong>duration</strong>: Number of milliseconds for the entire result</li>
+<li><strong>confidence</strong>: Number between 0 and 1 representing the probability of this result vs the other alternatives</li>
+<li><strong>transcript</strong>: Full result (up to the endpoint)</li>
+<li><strong>words</strong>: Array of the individual confidence, duration, and start time for each word in the transcript.  Can be used to provide finer alignment to the audio.</li>
+</ul></li>
+</ul>
+
+<h3 id="example">Example</h3>
+<div class="highlight"><pre style="color:#d0d0d0;background-color:#202020;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">bin/cubic-cli -s localhost:2727 transcribe -m <span style="color:#3677a9">1</span> -f timeline --stereo --insecure <span style="color:#3677a9">2</span>-channel.wav</code></pre></div>
+<p><details>
+<summary><font color="236ecc"><b>Click here to see sample output</b></font></summary></p>
+<div class="highlight"><pre style="color:#d0d0d0;background-color:#202020;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-json" data-lang="json">[
+  {
+    <span style="color:#6ab825;font-weight:bold">&#34;channel_id&#34;</span>: <span style="color:#3677a9">0</span>,
+    <span style="color:#6ab825;font-weight:bold">&#34;nbest&#34;</span>: [
+      {
+        <span style="color:#6ab825;font-weight:bold">&#34;words&#34;</span>: [
+          {
+            <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">1980</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">240</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;word&#34;</span>: <span style="color:#ed9d13">&#34;Thank&#34;</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">1</span>
+          },
+          {
+            <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">2220</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">120</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;word&#34;</span>: <span style="color:#ed9d13">&#34;you&#34;</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">1</span>
+          },
+          {
+            <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">2340</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">120</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;word&#34;</span>: <span style="color:#ed9d13">&#34;for&#34;</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">1</span>
+          },
+          {
+            <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">2460</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">330</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;word&#34;</span>: <span style="color:#ed9d13">&#34;calling&#34;</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">1</span>
+          },
+          {
+            <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">2800</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">470</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;word&#34;</span>: <span style="color:#ed9d13">&#34;Acme.&#34;</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">0.943</span>
+          },
+          {
+            <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">3660</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">120</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;word&#34;</span>: <span style="color:#ed9d13">&#34;How&#34;</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">1</span>
+          },
+          {
+            <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">3780</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">180</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;word&#34;</span>: <span style="color:#ed9d13">&#34;may&#34;</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">1</span>
+          },
+          {
+            <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">3960</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">60</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;word&#34;</span>: <span style="color:#ed9d13">&#34;I&#34;</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">1</span>
+          },
+          {
+            <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">4020</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">270</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;word&#34;</span>: <span style="color:#ed9d13">&#34;direct&#34;</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">1</span>
+          },
+          {
+            <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">4290</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">120</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;word&#34;</span>: <span style="color:#ed9d13">&#34;your&#34;</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">1</span>
+          },
+          {
+            <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">4410</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">450</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;word&#34;</span>: <span style="color:#ed9d13">&#34;call.&#34;</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">1</span>
+          }
+        ],
+        <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">1980</span>,
+        <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">2880</span>,
+        <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">0.902</span>,
+        <span style="color:#6ab825;font-weight:bold">&#34;transcript&#34;</span>: <span style="color:#ed9d13">&#34;Thank you for calling Acme. How may I direct your call.&#34;</span>
+      }
+    ]
+  },
+  {
+    <span style="color:#6ab825;font-weight:bold">&#34;channel_id&#34;</span>: <span style="color:#3677a9">1</span>,
+    <span style="color:#6ab825;font-weight:bold">&#34;nbest&#34;</span>: [
+      {
+        <span style="color:#6ab825;font-weight:bold">&#34;words&#34;</span>: [
+          {
+            <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">6180</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">300</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;word&#34;</span>: <span style="color:#ed9d13">&#34;Mary&#34;</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">0.877</span>
+          },
+          {
+            <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">7128</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">462</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;word&#34;</span>: <span style="color:#ed9d13">&#34;please.&#34;</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">1</span>
+          }
+        ],
+        <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">6180</span>,
+        <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">1410</span>,
+        <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">0.362</span>,
+        <span style="color:#6ab825;font-weight:bold">&#34;transcript&#34;</span>: <span style="color:#ed9d13">&#34;Mary please.&#34;</span>
+      }
+    ]
+  },
+  {
+    <span style="color:#6ab825;font-weight:bold">&#34;channel_id&#34;</span>: <span style="color:#3677a9">0</span>,
+    <span style="color:#6ab825;font-weight:bold">&#34;nbest&#34;</span>: [
+      {
+        <span style="color:#6ab825;font-weight:bold">&#34;words&#34;</span>: [
+          {
+            <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">8880</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">600</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;word&#34;</span>: <span style="color:#ed9d13">&#34;Certainly&#34;</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">1</span>
+          },
+          {
+            <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">9780</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">240</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;word&#34;</span>: <span style="color:#ed9d13">&#34;please&#34;</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">1</span>
+          },
+          {
+            <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">10020</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">210</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;word&#34;</span>: <span style="color:#ed9d13">&#34;hold&#34;</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">1</span>
+          },
+          {
+            <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">10230</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">180</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;word&#34;</span>: <span style="color:#ed9d13">&#34;on&#34;</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">1</span>
+          },
+          {
+            <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">10410</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">120</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;word&#34;</span>: <span style="color:#ed9d13">&#34;for&#34;</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">1</span>
+          },
+          {
+            <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">10530</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">112</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;word&#34;</span>: <span style="color:#ed9d13">&#34;just&#34;</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">0.622</span>
+          },
+          {
+            <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">10664</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">114</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;word&#34;</span>: <span style="color:#ed9d13">&#34;a&#34;</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">0.744</span>
+          },
+          {
+            <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">10778</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">532</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;word&#34;</span>: <span style="color:#ed9d13">&#34;minute.&#34;</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">1</span>
+          }
+        ],
+        <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: <span style="color:#3677a9">8880</span>,
+        <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: <span style="color:#3677a9">2430</span>,
+        <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">0.461</span>,
+        <span style="color:#6ab825;font-weight:bold">&#34;transcript&#34;</span>: <span style="color:#ed9d13">&#34;Certainly please hold on for just a minute.&#34;</span>
+      }
+    ]
+  }
+]</code></pre></div>
+<p></details></p>
+
+<h2 id="json-and-json-pretty">Json and Json-pretty</h2>
+
+<p>Both <code>json</code> and <code>json-pretty</code> return the same data.
+The only difference is that <code>json-pretty</code> includes line breaks and indentation to make it more human-readable.
+Both formats return all alternatives recognized for each result, with the default JSON encoding for
+the <a href="/sdk-cubic/protobuf/autogen-doc-cubic-proto/#message-recognitionalternative">RecognitionAlternative</a>
+object. That encoding makes it straightforward to deserialize start_time and duration fields into
+<a href="https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#google.protobuf.Duration">google.protobuf.Duration</a> objects, but may not be as human-readable because the JSON encoding for
+Duration objects has separate fields for seconds and nanoseconds.</p>
+
+<p>Word-level information is not included and the results are the order cubic processed them, so results from
+different channels are not guaranteed to be ordered according to their timestamps.</p>
+
+<h3 id="example-1">Example</h3>
+<div class="highlight"><pre style="color:#d0d0d0;background-color:#202020;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">bin/cubic-cli -s demo-cubic.cobaltspeech.com:2727 transcribe -m <span style="color:#3677a9">1</span> -f json-pretty testdata/this_is_a_test-en_us-16.wav </code></pre></div>
+<p><details>
+<summary><font color="236ecc"><b>Click here to see sample output</b></font></summary></p>
+<div class="highlight"><pre style="color:#d0d0d0;background-color:#202020;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-json" data-lang="json">{
+  <span style="color:#6ab825;font-weight:bold">&#34;UttID&#34;</span>: <span style="color:#ed9d13">&#34;this_is_a_test-en_us-16.wav&#34;</span>,
+  <span style="color:#6ab825;font-weight:bold">&#34;Responses&#34;</span>: [
+    {
+      <span style="color:#6ab825;font-weight:bold">&#34;alternatives&#34;</span>: [
+        {
+          <span style="color:#6ab825;font-weight:bold">&#34;transcript&#34;</span>: <span style="color:#ed9d13">&#34;This is a test.&#34;</span>,
+          <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">0.994</span>,
+          <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: {
+            <span style="color:#6ab825;font-weight:bold">&#34;nanos&#34;</span>: <span style="color:#3677a9">900000000</span>
+          },
+          <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: {
+            <span style="color:#6ab825;font-weight:bold">&#34;seconds&#34;</span>: <span style="color:#3677a9">1</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;nanos&#34;</span>: <span style="color:#3677a9">50000000</span>
+          }
+        },
+        {
+          <span style="color:#6ab825;font-weight:bold">&#34;transcript&#34;</span>: <span style="color:#ed9d13">&#34;Hi this is a test.&#34;</span>,
+          <span style="color:#6ab825;font-weight:bold">&#34;confidence&#34;</span>: <span style="color:#3677a9">0.006</span>,
+          <span style="color:#6ab825;font-weight:bold">&#34;start_time&#34;</span>: {
+            <span style="color:#6ab825;font-weight:bold">&#34;nanos&#34;</span>: <span style="color:#3677a9">5000000</span>
+          },
+          <span style="color:#6ab825;font-weight:bold">&#34;duration&#34;</span>: {
+            <span style="color:#6ab825;font-weight:bold">&#34;seconds&#34;</span>: <span style="color:#3677a9">1</span>,
+            <span style="color:#6ab825;font-weight:bold">&#34;nanos&#34;</span>: <span style="color:#3677a9">945000000</span>
+          }
+        }
+      ]
+    }
+  ]
+}</code></pre></div>
+<p></details></p>
+
+<h2 id="utterance-json">Utterance-json</h2>
+
+<p>Utterance-json is a tab-delimited format, included for backward compatibility with asr_tool, the previous command-line test utility for cubic.</p>
+
+<p>Each result is a separate line with the identifier separated from the json representation of the result
+by a tab character:</p>
+
+<pre><code>&lt;utteranceId&gt;_&lt;resultIndex&gt; &lt;tab&gt; {&lt;result json&gt;}
+</code></pre>
+
+<h3 id="example-2">Example</h3>
+<div class="highlight"><pre style="color:#d0d0d0;background-color:#202020;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">bin/cubic-cli -s demo-cubic.cobaltspeech.com:2727 transcribe -m <span style="color:#3677a9">1</span> -f utterance-json --list-file testdata/list.txt </code></pre></div>
+<p><details>
+<summary><font color="236ecc"><b>Click here to see sample output</b></font></summary></p>
+
+<pre><code>Utterance_1_0	{&quot;alternatives&quot;:[{&quot;transcript&quot;:&quot;This is a test.&quot;,&quot;confidence&quot;:0.994,&quot;start_time&quot;:{&quot;nanos&quot;:900000000},&quot;duration&quot;:{&quot;seconds&quot;:1,&quot;nanos&quot;:50000000}},{&quot;transcript&quot;:&quot;Hi this is a test.&quot;,&quot;confidence&quot;:0.006,&quot;start_time&quot;:{&quot;nanos&quot;:5000000},&quot;duration&quot;:{&quot;seconds&quot;:1,&quot;nanos&quot;:945000000}}]}
+Utterance_1_1	{&quot;alternatives&quot;:[{&quot;transcript&quot;:&quot;&quot;,&quot;confidence&quot;:0.731},{&quot;transcript&quot;:&quot;Yeah.&quot;,&quot;confidence&quot;:0.163,&quot;start_time&quot;:{&quot;seconds&quot;:3,&quot;nanos&quot;:261000000},&quot;duration&quot;:{&quot;seconds&quot;:1,&quot;nanos&quot;:801000000}},{&quot;transcript&quot;:&quot;I.&quot;,&quot;confidence&quot;:0.039,&quot;start_time&quot;:{&quot;seconds&quot;:3,&quot;nanos&quot;:261000000},&quot;duration&quot;:{&quot;seconds&quot;:1,&quot;nanos&quot;:801000000}},{&quot;transcript&quot;:&quot;Hey.&quot;,&quot;confidence&quot;:0.036,&quot;start_time&quot;:{&quot;seconds&quot;:3,&quot;nanos&quot;:261000000},&quot;duration&quot;:{&quot;seconds&quot;:1,&quot;nanos&quot;:801000000}},{&quot;transcript&quot;:&quot;Bye.&quot;,&quot;confidence&quot;:0.032,&quot;start_time&quot;:{&quot;seconds&quot;:3,&quot;nanos&quot;:261000000},&quot;duration&quot;:{&quot;seconds&quot;:1,&quot;nanos&quot;:801000000}}]}
+Utterance_2_0	{&quot;alternatives&quot;:[{&quot;transcript&quot;:&quot;The second test.&quot;,&quot;confidence&quot;:0.6,&quot;start_time&quot;:{&quot;nanos&quot;:944000000},&quot;duration&quot;:{&quot;seconds&quot;:1,&quot;nanos&quot;:96000000}},{&quot;transcript&quot;:&quot;What the second test.&quot;,&quot;confidence&quot;:0.154,&quot;start_time&quot;:{},&quot;duration&quot;:{&quot;seconds&quot;:2,&quot;nanos&quot;:40000000}},{&quot;transcript&quot;:&quot;At the second test.&quot;,&quot;confidence&quot;:0.134,&quot;start_time&quot;:{},&quot;duration&quot;:{&quot;seconds&quot;:2,&quot;nanos&quot;:40000000}},{&quot;transcript&quot;:&quot;But the second test.&quot;,&quot;confidence&quot;:0.09,&quot;start_time&quot;:{},&quot;duration&quot;:{&quot;seconds&quot;:2,&quot;nanos&quot;:40000000}},{&quot;transcript&quot;:&quot;Is the second test.&quot;,&quot;confidence&quot;:0.022,&quot;start_time&quot;:{},&quot;duration&quot;:{&quot;seconds&quot;:2,&quot;nanos&quot;:40000000}}]}
+</code></pre>
+
+<p></details></p>
+
+    
+    
+          <footer class=" footline" >
+	
+</footer>
+  </div>
+</div>
+
+<div id="navigation">
+</div>
+
+</section>
+<div style="left: -1000px; overflow: scroll; position: absolute; top: -1000px; border: none; box-sizing: content-box; height: 200px; margin: 0px; padding: 0px; width: 200px;">
+  <div style="border: none; box-sizing: content-box; height: 200px; margin: 0px; padding: 0px; width: 200px;"></div>
+</div>    
+
+<script src="/cubic-cli/js/clipboard.min.js"></script>
+<script src="/cubic-cli/js/featherlight.min.js"></script>
+<script src="/cubic-cli/js/html5shiv-printshiv.min.js"></script>
+
+<script src="/cubic-cli/js/modernizr.custom.71422.js"></script>
+<script src="/cubic-cli/js/docdock.js"></script>
+<script src="/cubic-cli/theme-original/script.js"></script>
+
+
+    
+
+    
+    
+
+    
+  </body>
+</html>

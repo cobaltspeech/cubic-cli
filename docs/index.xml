@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Cubic Command Line Tool Documentation on Cubic Command Line Interface -- Cobalt</title>
+    <link>https://cobaltspeech.github.io/cubic-cli/</link>
+    <description>Recent content in Cubic Command Line Tool Documentation on Cubic Command Line Interface -- Cobalt</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en-us</language>
+    
+	<atom:link href="https://cobaltspeech.github.io/cubic-cli/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>Overview</title>
+      <link>https://cobaltspeech.github.io/cubic-cli/cli/overview/</link>
+      <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
+      
+      <guid>https://cobaltspeech.github.io/cubic-cli/cli/overview/</guid>
+      <description>&lt;p&gt;The cubic-cli binary provides a convenient way to generate transcripts from an audio file in order to evaluate a model.  It accepts either a single audio file or a list of files, sends the audio to a running instance of cubicsvr, and outputs the transcript in one of several formats.&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Transcribe Command</title>
+      <link>https://cobaltspeech.github.io/cubic-cli/cli/transcribe/</link>
+      <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
+      
+      <guid>https://cobaltspeech.github.io/cubic-cli/cli/transcribe/</guid>
+      <description>&lt;p&gt;This command is used for transcribing audio files.
+There are two modes: single file or list file.&lt;/p&gt;
+
+&lt;p&gt;Usage:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;transcribe FILE_PATH [flags]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;In single mode, FILE_PATH should point to a single audio file.&lt;/p&gt;
+
+&lt;p&gt;In list-file mode, FILE_PATH should point to a file listing multiple audio files with the format &amp;ldquo;Utterance_ID \t FILE_PATH \n&amp;rdquo;.&lt;/p&gt;
+
+&lt;p&gt;Audio files in the following formats are supported:
+    WAV, FLAC, MP3, VOX, and RAW(PCM16SLE).&lt;/p&gt;
+
+&lt;p&gt;The file extension (wav, flac, mp3, vox, raw) will be used to determine which
+ codec to use.  Use WAV or FLAC for best results.&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>Output formats</title>
+      <link>https://cobaltspeech.github.io/cubic-cli/cli/formats/</link>
+      <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
+      
+      <guid>https://cobaltspeech.github.io/cubic-cli/cli/formats/</guid>
+      <description>&lt;p&gt;There are four different output options supported:&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;#timeline&#34;&gt;timeline&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#json-and-json-pretty&#34;&gt;json&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#json-and-json-pretty&#34;&gt;json-pretty&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#utterance-json&#34;&gt;utterance-json&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;All the output options return a list of JSON representations of each result recognized in the
+transcript. Cubic can be configured with different endpoint settings to determine how long a
+pause between words will begin a new result; the default is half a second.&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title></title>
+      <link>https://cobaltspeech.github.io/cubic-cli/_header/</link>
+      <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
+      
+      <guid>https://cobaltspeech.github.io/cubic-cli/_header/</guid>
+      <description>Cubic Command Line Interface &amp;ndash; Cobalt</description>
+    </item>
+    
+  </channel>
+</rss>

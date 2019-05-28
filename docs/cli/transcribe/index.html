@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Cubic Command Line Interface -- Cobalt</title>
+    
+      <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Transcribe Command :: Cubic Command Line Interface -- Cobalt</title>
+<link rel="shortcut icon" href="/cubic-cli/images/favicon.ico" type="image/x-icon" />
+<link href="/cubic-cli/css/nucleus.css" rel="stylesheet">
+<link href="/cubic-cli/css/font-awesome.min.css" rel="stylesheet">
+<link href="/cubic-cli/css/hybrid.css" rel="stylesheet">
+<link href="/cubic-cli/css/featherlight.min.css" rel="stylesheet">
+<link href="/cubic-cli/css/auto-complete.css" rel="stylesheet">
+<link href="/cubic-cli/theme-original/style.css" rel="stylesheet">
+
+  <link href="/cubic-cli/theme-original/variant-blue.css" rel="stylesheet">
+
+<link rel="stylesheet" href="/cubic-cli/css/bootstrap.min.css">
+<script src="/cubic-cli/js/jquery-2.x.min.js"></script>
+<style type="text/css">
+  :root #header + #content > #left > #rlblock_left {
+    display:none !important;
+  }
+</style>
+<link href="/cubic-cli/css/tabs.css" rel="stylesheet" type="text/css">
+<script src="/cubic-cli/js/tabs.js"></script>
+
+
+    
+  </head>
+  <body data-url="/cubic-cli/cli/transcribe/">
+    
+      <div id="headermain"></div>
+<nav id="sidebar" class="showVisitedLinks">
+
+
+
+<div class="highlightable">
+  <div id="header-wrapper">
+    <div id="header">
+      
+	
+  
+    <p><img src="/sdk-cubic/images/logo-white.png" alt="Cobalt's CLI Documentation" /></p>
+
+<p>Cubic Command Line Interface &ndash; Cobalt</p>
+
+  
+
+
+    </div>
+        <div class="searchbox">
+		    <label for="search-by"><i class="fa fa-search"></i></label>
+		    <input data-search-input id="search-by" type="text" placeholder="Search...">
+		    <span data-search-clear=""><i class="fa fa-close"></i></span>
+		</div>
+		<script type="text/javascript" src="/cubic-cli/js/lunr.min.js"></script>
+		<script type="text/javascript" src="/cubic-cli/js/auto-complete.js"></script>
+		<script type="text/javascript">
+        
+            var baseurl = "https:\/\/cobaltspeech.github.io\/cubic-cli";
+        
+		</script>
+		<script type="text/javascript" src="/cubic-cli/js/search.js"></script>
+  </div>
+
+      <ul class="topics">
+            <li data-nav-id="/cubic-cli/" class="dd-item">
+            <a href="/cubic-cli/"><i class="fa fa-fw fa-home"></i></a>
+            </li>
+    <li data-nav-id="/cubic-cli/cli/" class="dd-item parent alwaysopen haschildren
+        ">
+      <div>
+      <a href="/cubic-cli/cli/">Cubic command-line interface</a>
+            <i class="fa fa-angle-down fa-lg category-icon"></i><i class="fa fa-circle-thin read-icon"></i>
+      </div>
+        <ul>
+      <li data-nav-id="/cubic-cli/cli/overview/" class="dd-item">
+        <div>
+          <a href="/cubic-cli/cli/overview/">
+            Overview
+          </a><i class="fa fa-circle-thin read-icon"></i>
+        </div>
+    </li>
+      <li data-nav-id="/cubic-cli/cli/transcribe/" class="dd-item active">
+        <div>
+          <a href="/cubic-cli/cli/transcribe/">
+            Transcribe Command
+          </a><i class="fa fa-circle-thin read-icon"></i>
+        </div>
+    </li>
+      <li data-nav-id="/cubic-cli/cli/formats/" class="dd-item">
+        <div>
+          <a href="/cubic-cli/cli/formats/">
+            Output formats
+          </a><i class="fa fa-circle-thin read-icon"></i>
+        </div>
+    </li>
+        </ul>
+    </li>
+
+
+
+        <section id="shortcuts">
+                <li class="" role=""><h3>More</h3><a href="https://github.com/cobaltspeech/cubic-cli" target="_blank" rel="noopener"><i class='fa fa-github'></i> <label>Github repo</label></a></li>
+                <li class="" role=""><a href="https://www.cobaltspeech.com/contact" target="_blank" rel="noopener"><i class='fa fa-bookmark'></i> <label>Contact us</label></a></li>
+        </section>
+            <a id="clear-history" class="" href="#" data-clear-history-toggle=""><i class="fa  fa-history"></i> Clear History</a>
+
+    <hr />
+    <li></li>
+    
+    </ul>
+
+ <section id="footer">
+    </section>
+  </div>
+</nav>
+
+
+
+<section id="body">
+<div id="overlay"></div>
+<div class="padding highlightable">
+
+  <div id="top-bar">
+    <div id="breadcrumbs" itemscope="" itemtype="http://data-vocabulary.org/Breadcrumb">
+        <span id="sidebar-toggle-span">
+          <a href="#" id="sidebar-toggle" data-sidebar-toggle="">
+            <i class="fa fa-bars"></i>
+          </a>
+        </span>
+        <span id="toc-menu"><i class="fa fa-list-alt"></i></span>
+        <span class="links">
+        
+
+
+
+
+
+
+
+ <a href='/cubic-cli/'>Cubic Command Line Tool Documentation</a> > <a href='/cubic-cli/cli/'>Cubic command-line interface</a> > Transcribe Command
+
+ 
+
+ 
+
+   
+        </span>
+    </div>
+    
+    
+    <div class="progress">
+        <div class="wrapper">
+    <nav id="TableOfContents">
+<ul>
+<li>
+<ul>
+<li>
+<ul>
+<li><a href="#list-file">List-file</a></li>
+<li><a href="#output">Output</a></li>
+<li><a href="#model">Model</a></li>
+<li><a href="#audio-channels">Audio channels</a></li>
+<li><a href="#workers">Workers</a></li>
+<li><a href="#output-format">Output format</a></li>
+</ul></li>
+<li><a href="#examples">Examples</a></li>
+</ul></li>
+</ul>
+</nav>
+        </div>
+    </div>
+    
+
+  </div>
+
+
+<div id="body-inner">
+  
+    <h1>Transcribe Command</h1>
+  
+
+
+
+    
+    
+    
+    <p>This command is used for transcribing audio files.
+There are two modes: single file or list file.</p>
+
+<p>Usage:</p>
+
+<pre><code>transcribe FILE_PATH [flags]
+</code></pre>
+
+<p>In single mode, FILE_PATH should point to a single audio file.</p>
+
+<p>In list-file mode, FILE_PATH should point to a file listing multiple audio files with the format &ldquo;Utterance_ID \t FILE_PATH \n&rdquo;.</p>
+
+<p>Audio files in the following formats are supported:
+    WAV, FLAC, MP3, VOX, and RAW(PCM16SLE).</p>
+
+<p>The file extension (wav, flac, mp3, vox, raw) will be used to determine which
+ codec to use.  Use WAV or FLAC for best results.</p>
+
+<table>
+<thead>
+<tr>
+<th>Short</th>
+<th>Long form</th>
+<th>Arg</th>
+<th>Purpose</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>-l</td>
+<td><code>--list-file</code></td>
+<td>none</td>
+<td>Indicates that FILE_PATH is pointing to a list of audio files.</td>
+</tr>
+
+<tr>
+<td>-o</td>
+<td><code>--output</code></td>
+<td>string</td>
+<td>Path to directory where the results should be written.<br/>&rdquo;-&rdquo; indicates stdout. (default &ldquo;-&rdquo;)</td>
+</tr>
+
+<tr>
+<td>-m</td>
+<td><code>--model</code></td>
+<td>string</td>
+<td>Selects which model ID to use for transcribing. (default &ldquo;1&rdquo;)</td>
+</tr>
+
+<tr>
+<td>-c</td>
+<td><code>--audioChannels</code></td>
+<td>ints</td>
+<td>Audio channels to transcribe.  (Defaults to mono)</td>
+</tr>
+
+<tr>
+<td></td>
+<td><code>--stereo</code></td>
+<td>none</td>
+<td>Sets <code>--audioChannels &quot;0,1&quot;</code> to transcribe both audio channels of a stereo file.</td>
+</tr>
+
+<tr>
+<td>-n</td>
+<td><code>--workers</code></td>
+<td>int</td>
+<td>Number of concurrent requests to send to cubicsvr. (default 1)</td>
+</tr>
+
+<tr>
+<td>-f</td>
+<td><code>--outputFormat</code></td>
+<td>string</td>
+<td>Format of output.  Can be [json,json-pretty,timeline,utterance-json]. (default &ldquo;timeline&rdquo;)</td>
+</tr>
+
+<tr>
+<td>-a</td>
+<td><code>--fmt.timeline.maxAlts</code></td>
+<td>int</td>
+<td>Maximum number of alternatives to provide for each result in the timeline format. (default 1)</td>
+</tr>
+</tbody>
+</table>
+
+<h3 id="list-file">List-file</h3>
+
+<p>To process multiple files, use the <code>--list-file</code> flag and specify a text file instead of an audio file.
+The text file should be tab-delimited, with one audio file per line.  Each line should begin with a unique
+identifier containing no white space, which will be used to identify which transcript belongs to which
+input file.</p>
+
+<p>Example:</p>
+
+<pre><code>utterance1  /mnt/audio/abcd.wav
+utterance2  /mnt/audio/efgh.wav
+</code></pre>
+
+<p>When cubic-cli writes to stdout (<code>-o &quot;-&quot;</code>), each output will be prefaced by the utterance id and an extra newline.</p>
+
+<h3 id="output">Output</h3>
+
+<p>Output must be an existing directory to which the transcripts will be written.</p>
+
+<p>In single-file mode, the transcript will be given the same name as the audio file, with a .txt extension.</p>
+
+<p>In list-file mode, each file processed will have a separate output file, using the utteranceID as the filename with a &ldquo;.txt&rdquo; extention.</p>
+
+<p>In either mode, &ldquo;-&rdquo; prints to stdout, which is the default behavior.</p>
+
+<h3 id="model">Model</h3>
+
+<p>A cubicsvr instance may be configured to use one or more models, each with a model id specified in cubicsvr.cfg.toml. The specified id must be one of the ones configured for the cubicsvr instance.</p>
+
+<p>For example, if connecting to the demo server, model=1 specifies the U.S. English 16 kHz model and model=2 specifies the U.S. English 8 kHz model.</p>
+
+<p>The models for a server may be listed by calling <code>./bin/cubic-cli --insecure --server localhost:2727 models</code>.</p>
+
+<p>Example:</p>
+<div class="highlight"><pre style="color:#d0d0d0;background-color:#202020;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ bin/cubic-cli -s demo-cubic.cobaltspeech.com:2727 models
+Model ID <span style="color:#ed9d13">&#39;&#34;1&#34;&#39;</span>: English (US) 16KHz (Sample Rate: <span style="color:#3677a9">16000</span>)
+Model ID <span style="color:#ed9d13">&#39;&#34;2&#34;&#39;</span>: English (US) 8KHz (Sample Rate:  <span style="color:#3677a9">8000</span>)
+Model ID <span style="color:#ed9d13">&#39;&#34;3&#34;&#39;</span>: Portuguese (BR) 8KHz (Sample Rate:  <span style="color:#3677a9">8000</span>)
+Model ID <span style="color:#ed9d13">&#39;&#34;4&#34;&#39;</span>: Spanish (ES) 16KHz (Sample Rate: <span style="color:#3677a9">16000</span>)
+
+$ bin/cubic-cli -s demo-cubic.cobaltspeech.com:2727 transcribe -m <span style="color:#3677a9">2</span> sample-8khz.wav </code></pre></div>
+<h3 id="audio-channels">Audio channels</h3>
+
+<p>By default, cubic-svr assumes the input is a mono file and transcribes channel 0.
+Pass <code>--audioChannels</code> to specify other channels.</p>
+
+<p>E.g. <code>-c &quot;0,2&quot;</code> would transcribe the first and third channels in the file.</p>
+
+<p><code>--stereo</code> is equivalent to <code>-c 0,1</code></p>
+
+<p><code>-c</code> or <code>--audioChannel</code> overrides <code>--stereo</code> if both are provided.</p>
+
+<h3 id="workers">Workers</h3>
+
+<p>The <code>workers</code> parameter limits the number of requests to send to cubicsvr at once.</p>
+
+<p>Please note, while this value is defined client-side, the throughput will be limited by
+the available computational ability of the server.  If you are the only connection to an
+8-core server, then &ldquo;-n 8&rdquo; is a reasonable value.</p>
+
+<h3 id="output-format">Output format</h3>
+
+<p>See <a href="/sdk-cubic/cli/formats">Formats</a></p>
+
+<h2 id="examples">Examples</h2>
+
+<p>There are two audio files in the testdata folder.
+They are US English, recorded at 16kHz.
+The filenames contain the intended transcription.</p>
+
+<p>As a quick start, these commands are provided as examples of how to use the
+binary.  They should be run from the root directory of <code>cubic-cli</code>.</p>
+
+<p>Note: These examples show commands both for a local instance
+(assuming cubic server is running at localhost:2727) and for calling Cobalt&rsquo;s demo server.
+(<code>--server demo-cubic.cobaltspeech.com:2727</code>). The demo server uses TLS and does not need the
+<code>--insecure</code> flag. Any of the examples could be run against either server.
+All examples use the default modelId (1), which is the U.S. English 16 kHz model on the
+demo server, but there may be a different model in the local instance which is not a good fit
+for the sample audio files provided.</p>
+
+<blockquote>
+<p>Commercial use of the demo service is not permitted. This server is for testing
+and demonstration purposes only and is not guaranteed to support high
+availability or high volume. Data uploaded to the server may be stored for
+internal purposes.</p>
+</blockquote>
+<div class="highlight"><pre style="color:#d0d0d0;background-color:#202020;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh"><span style="color:#999;font-style:italic"># Display the versions of client and server</span>
+./bin/cubic-cli --insecure --server localhost:2727 version
+
+<span style="color:#999;font-style:italic"># List available models.  Note: The listed modelIDs are used in transcription methods</span>
+./bin/cubic-cli --insecure --server localhost:2727 models
+
+<span style="color:#999;font-style:italic"># Transcribe the single file this_is_a_test-en_us-16.wav.</span>
+<span style="color:#999;font-style:italic"># Should result in the transcription of &#34;this is a test&#34;</span>
+./bin/cubic-cli --insecure --server localhost:2727 <span style="color:#ed9d13">\
+</span><span style="color:#ed9d13"></span>    transcribe ./testdata/this_is_a_test-en_us-16.wav
+
+<span style="color:#999;font-style:italic"># Transcribe the list of files defined at ./testdata/list.txt</span>
+<span style="color:#999;font-style:italic"># Should result in the transcription of &#34;this is a test&#34; and &#34;the second test&#34; printed to stdout</span>
+./bin/cubic-cli --insecure --server localhost:2727 <span style="color:#ed9d13">\
+</span><span style="color:#ed9d13"></span>    transcribe --list-file ./testdata/list.txt
+
+<span style="color:#999;font-style:italic"># Same as the previous `transcribe` command, but will create two text files in thie testdata directory</span>
+<span style="color:#999;font-style:italic"># and may send up to two files at a time to the demo server</span>
+./bin/cubic-cli --server demo-cubic.cobaltspeech.com:2727 <span style="color:#ed9d13">\
+</span><span style="color:#ed9d13"></span>    transcribe --list-file ./testdata/list.txt <span style="color:#ed9d13">\
+</span><span style="color:#ed9d13"></span>    --output ./testdata --workers <span style="color:#3677a9">2</span>
+
+<span style="color:#999;font-style:italic"># Transcribe multiple channels. Note: this is the same as &#39;--stereo&#39;</span>
+./bin/cubic-cli --server demo-cubic.cobaltspeech.com:2727 <span style="color:#ed9d13">\
+</span><span style="color:#ed9d13"></span>    transcribe ./testdata/this_is_a_test-en_us-16.wav <span style="color:#ed9d13">\
+</span><span style="color:#ed9d13"></span>    --audioChannels <span style="color:#3677a9">0</span>,1
+
+<span style="color:#999;font-style:italic"># Select different output format.  --outputFormat json allows you to easily</span> 
+<span style="color:#999;font-style:italic"># pipe the results to another program.</span>
+./bin/cubic-cli --insecure --server localhost:2727 <span style="color:#ed9d13">\
+</span><span style="color:#ed9d13"></span>    transcribe ./testdata/this_is_a_test-en_us-16.wav <span style="color:#ed9d13">\
+</span><span style="color:#ed9d13"></span>    --outputFormat json</code></pre></div>
+
+    
+    
+          <footer class=" footline" >
+	
+</footer>
+  </div>
+</div>
+
+<div id="navigation">
+<a class="nav nav-prev" href="/cubic-cli/cli/overview/" title="Overview"> <i class="fa fa-chevron-left"></i><label>Overview</label></a>
+    <a class="nav nav-next" href="/cubic-cli/cli/formats/" title="Output formats" style="margin-right: 0px;"><label>Output formats</label><i class="fa fa-chevron-right"></i></a></div>
+
+</section>
+<div style="left: -1000px; overflow: scroll; position: absolute; top: -1000px; border: none; box-sizing: content-box; height: 200px; margin: 0px; padding: 0px; width: 200px;">
+  <div style="border: none; box-sizing: content-box; height: 200px; margin: 0px; padding: 0px; width: 200px;"></div>
+</div>    
+
+<script src="/cubic-cli/js/clipboard.min.js"></script>
+<script src="/cubic-cli/js/featherlight.min.js"></script>
+<script src="/cubic-cli/js/html5shiv-printshiv.min.js"></script>
+
+<script src="/cubic-cli/js/modernizr.custom.71422.js"></script>
+<script src="/cubic-cli/js/docdock.js"></script>
+<script src="/cubic-cli/theme-original/script.js"></script>
+
+
+    
+
+    
+    
+
+    
+  </body>
+</html>

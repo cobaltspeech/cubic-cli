@@ -1,57 +1,31 @@
 ---
-title: "CLI Overview"
-weight: 10
+title: "Cubic Command Line Tool Documentation"
 ---
 
-The cubic-cli binary provides a convenient way to generate transcripts from an audio file in order to evaluate a model.  It accepts either a single audio file or a list of files, sends the audio to a running instance of cubicsvr, and outputs the transcript in one of several formats.
+# Cubic Overview
 
-<!--more-->
+Cubic is Cobalt’s automatic speech recognition (ASR) engine. It can be deployed on-prem and accessed over the network or on your local machine via this command-line tool. The tool is written using our public-facing [SDK](https://cobaltspeech.github.io/sdk-cubic/) so the source code provides an example of how to use the SDK.
 
-| Command                | Purpose |
-| ---------------------- | ------- |
-| `cubic-cli`            | Prints the default help message. |
-| `cubic-cli models`     | Displays the transcription models being served by the given instance. |
-| `cubic-cli version`    | Displays the versions of both the client and the server. |
-| `cubic-cli transcribe` | Sends audio file(s) to server for transcription. |
+## Formatted output
 
-`[cmd] --help` can be run on any command for more details on usage and included flags.
+Speech recognition systems typically output the words that were spoken, with no formatting. For example, utterances with numbers in might return “twenty seven bridges”, and “the year two thousand and three”. Cubic has the option to enable basic formatting of speech recognition results:
 
-## Global Flags
+* Capitalising the first letter of the utterance
+* Numbers: “cobalt’s atomic number is twenty seven” -> “Cobalt’s atomic number is 27”
+* Truecasing: “the iphone was launched in two thousand and seven” -> “The iPhone was launched in 2007”
+* Ordinals: “summer solstice is twenty first june” -> “Summer solstice is 21st June”
+* Punctuation: "from mid april on the rain has ben incessant" -> "From mid-April on, the rain has been incessant."
 
-All commands accept the following flags
+The cubic server configuration determines which of these formatting rules will apply; for instance, you might choose to enable punctuation but not change number words or vice versa depending on how the output will be used.
 
-| Short | Long form      | Arg | Purpose |
-| ------|--------------- | ---- | ------- |
-| |      `--insecure`      | none | By default, connections to the server are encrypted (TLS).  Include`'--insecure` if you want TLS disabled. |
-| -s | `--server` | string | Address of running cubicsvr instance.  Format should be 'address:port'. (default "localhost:2727") |
-| -h | `--help` | none | Display more details on usage and available flags |
+## Obtaining Cubic
 
-## Examples
-
-Note: These commands assume that the your instance of cubic server is available
-at `localhost:2727` and that the command is being run from the root of the cubic-cli directory.
-
-If you do not have a local instance, Cobalt's demo server can be accessed with `--server
-demo-cubic.cobaltspeech.com:2727`. This uses TLS and does not need the
-`--insecure` flag.
-
-> Commercial use of the demo service is not permitted. This server is for testing
-and demonstration purposes only and is not guaranteed to support high
-availability or high volume. Data uploaded to the server may be stored for
-internal purposes.
-
-```sh
-# Display the versions of client and server
-./bin/cubic-cli --insecure --server localhost:2727 version
-
-# List available models.  Note: The listed modelIDs are used in transcription methods
-./bin/cubic-cli --insecure --server localhost:2727 models
-
-# Transcribe the single file this_is_a_test-en_us-16.wav using modelId1.
-# (On the demo server, modelId 1 is the U.S. English 16 kHz model--the model id depends on the
-# cubic server configuration.)
-# Should result in the transcription of "this is a test"
-./bin/cubic-cli --insecure --server localhost:2727 -m 1 transcribe ./testdata/this_is_a_test-en_us-16.wav
-```
-
-For more examples of the transcribe command, see [Transcribe](/sdk-cubic/cli/transcribe)
+Cobalt will provide you with a package of Cubic that contains the engine,
+appropriate speech recognition models and a server application.  This server
+exports Cubic's functionality over the gRPC protocol.  The
+https://github.com/cobaltspeech/sdk-cubic repository contains the SDK that you
+can use in your application to communicate with the Cubic server. This SDK is
+currently available for the Go and Python languages; and we would be happy to talk to you if
+you need support for other languages. Most of the core SDK is generated
+automatically using the gRPC tools, and Cobalt provides a top level package for
+more convenient API calls.

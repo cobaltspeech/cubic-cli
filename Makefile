@@ -12,25 +12,47 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Needed tools are installed to BINDIR.
+# Needed tools are installed to DEPSBIN.
 #
 # TODO: We share some tools across repos, so having this be local is not ideal.
-# We should figure out a strategy for this BINDIR, but until then having a local
+# We should figure out a strategy for this DEPSBIN, but until then having a local
 # folder helps us not depend on GOPATH at all (beyond what the go toolchain
 # needs/does) and allows our CI builds to be ephemeral.
+DEPSBIN := ./deps/bin
 BINDIR := ./bin
 
-LINTER := $(BINDIR)/golangci-lint
+
+LINTER := $(DEPSBIN)/golangci-lint
 LINTER_VERSION := 1.15.0
+HUGO_VERSION := 0.55.6
 
 # Linux vs Darwin detection for the machine on which the build is taking place (not to be used for the build target)
-DEV_OS := $(shell uname -s | tr A-Z a-z)
+DEV_OS := $(shell uname -s)
+LINT_OS := $(shell echo $(DEV_OS) | tr A-Z a-z)
+ifeq ($(DEV_OS),Darwin)
+	HUGO_OS="macOS"
+else
+	HUGO_OS=$(DEV_OS)
+endif
+
+export PATH := ${DEPSBIN}:$(PATH)
 
 all: build
 
 $(LINTER):
-	mkdir -p $(BINDIR)
-	wget "https://github.com/golangci/golangci-lint/releases/download/v$(LINTER_VERSION)/golangci-lint-$(LINTER_VERSION)-$(DEV_OS)-amd64.tar.gz" -O - | tar -xz -C $(BINDIR) --strip-components=1 --exclude=README.md --exclude=LICENSE
+	mkdir -p $(DEPSBIN)
+	wget "https://github.com/golangci/golangci-lint/releases/download/v$(LINTER_VERSION)/golangci-lint-$(LINTER_VERSION)-$(LINT_OS)-amd64.tar.gz" -O - | tar -xz -C $(DEPSBIN) --strip-components=1 --exclude=README.md --exclude=LICENSE
+
+.PHONY: deps-hugo
+deps-hugo:  ${DEPSBIN}/hugo
+${DEPSBIN}/hugo:
+	mkdir -p $(DEPSBIN)
+	cd ${DEPSBIN} && wget \
+		"https://github.com/gohugoio/hugo/releases/download/v$(HUGO_VERSION)/hugo_$(HUGO_VERSION)_$(HUGO_OS)-64bit.tar.gz" -O - | tar xz hugo
+
+.PHONY: docs
+gen-doc: deps-hugo
+	cd docs-src && ../$(DEPSBIN)/hugo -d ../docs 
 
 # Get vendored dependencies
 .PHONY: mod

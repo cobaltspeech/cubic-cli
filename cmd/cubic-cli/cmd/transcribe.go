@@ -146,7 +146,11 @@ var transcribeCmd = &cobra.Command{
 	SilenceErrors: true,
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) < 1 {
-			cmd.Usage()
+			err := cmd.Usage()
+			if err != nil {
+				// This is highly unlikely, but keeps the linter from complaining
+				fmt.Println("Unable to print usage info", err)
+			}
 			fmt.Println()
 			return fmt.Errorf("transcribe requires a FILE_PATH argument")
 		}

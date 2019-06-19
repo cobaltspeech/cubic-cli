@@ -130,7 +130,7 @@ Summary of "--outputFormat" options:
     * utterance-json - "UttID_SegID \t json of a single Result", grouped by UttID.
     * stream         - Outputs the 1-best transcript as soon as the results come back.  
                        No ordering guarentees are offered.  No headers/UttIDs are provided.
-                       Partial results are included.
+                       Partial results are excluded.
 
 See "transcribe --help" for details on the other flags.`
 

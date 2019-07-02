@@ -74,7 +74,7 @@ func init() {
 		"  prefaced by the utterance ID and have an extra newline seperating it from the next.")
 
 	transcribeCmd.Flags().StringVarP(&outputFormat, "outputFormat", "f", "timeline",
-		"Format of output.  Can be [json,json-pretty,timeline,utterance-json].")
+		"Format of output.  Can be [json,json-pretty,timeline,utterance-json,stream].")
 
 	transcribeCmd.Flags().IntSliceVarP(&audioChannels, "audioChannels", "c", []int{}, ""+
 		"Audio channels to transcribe.  Defaults to mono.\n"+
@@ -128,6 +128,9 @@ Summary of "--outputFormat" options:
     * json-pretty    - json of map[uttID][]Results, prettified with newlines and indents.
     * timeline       - "start_time|channel_id|1best transcript", grouped by UttID.
     * utterance-json - "UttID_SegID \t json of a single Result", grouped by UttID.
+    * stream         - Outputs the 1-best transcript as soon as the results come back.  
+                       No ordering guarentees are offered.  No headers/UttIDs are provided.
+                       Partial results are excluded.
 
 See "transcribe --help" for details on the other flags.`
 
@@ -158,6 +161,7 @@ var transcribeCmd = &cobra.Command{
 		case "utterance-json": // Do nothing
 		case "json-pretty": // Do nothing
 		case "timeline": // Do nothing
+		case "stream": // Do nothing
 		default:
 			return fmt.Errorf("invalid option for outputFormat: '%v'", outputFormat)
 		}
@@ -165,6 +169,10 @@ var transcribeCmd = &cobra.Command{
 		// utterance-json must print to stdout
 		if outputFormat == "utterance-json" && resultsPath != "-" {
 			return fmt.Errorf("Aborting: --outputFormat utterance-json can only write to stdout")
+		}
+		// stream must print to stdout
+		if outputFormat == "stream" && resultsPath != "-" {
+			return fmt.Errorf("Aborting: --outputFormat stream can only write to stdout")
 		}
 
 		// Check for overwritting an existing results file.
@@ -276,6 +284,8 @@ func transcribe() error {
 		nFilesWritten = processResultsJSON(fileResultsChannel, true)
 	case "timeline":
 		nFilesWritten = processResultsTimeline(fileResultsChannel)
+	case "stream":
+		// Do nothing, the results are written directly to stdout as they are recieved.
 	default:
 		fmt.Fprintf(os.Stderr, "Internal error: invalid outputFormat '%s'\n", outputFormat)
 	}
@@ -508,7 +518,16 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 			audio, // The audio file to send
 			func(response *cubicpb.RecognitionResponse) { // The callback for results
 				verbosePrintf(os.Stdout, "Worker%2d recieved result segment #%d for Utterance '%s'.\n", workerID, segmentID, input.uttID)
-				fileResponses = append(fileResponses, response.Results...)
+				if outputFormat == "stream" {
+					// Print the response to stdout
+					for _, r := range response.Results {
+						if !r.IsPartial && len(r.Alternatives) > 0 {
+							fmt.Fprintln(os.Stdout, r.Alternatives[0].Transcript)
+						}
+					}
+				} else {
+					fileResponses = append(fileResponses, response.Results...)
+				}
 				segmentID++
 			})
 
@@ -520,7 +539,7 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 
 		// Set up output file writer
 		var outputWriter io.WriteCloser
-		if outputFormat != "utterance-json" {
+		if outputFormat != "utterance-json" && outputFormat != "stream" { // These two force stdout, so skip this step for them.
 			var err error
 			outputWriter, err = getOutputWriter(input.outputPath)
 			if err != nil {

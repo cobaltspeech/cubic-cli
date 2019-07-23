@@ -128,7 +128,7 @@ Summary of "--outputFormat" options:
     * json-pretty    - json of map[uttID][]Results, prettified with newlines and indents.
     * timeline       - "start_time|channel_id|1best transcript", grouped by UttID.
     * utterance-json - "UttID_SegID \t json of a single Result", grouped by UttID.
-    * stream         - Outputs the 1-best transcript as soon as the results come back.  
+    * stream         - Outputs the 1-best transcript as soon as the results come back.
                        No ordering guarentees are offered.  No headers/UttIDs are provided.
                        Partial results are excluded.
 
@@ -548,10 +548,12 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 			}
 		}
 
-		fileResultsChannel <- outputs{
-			UttID:        input.uttID,
-			Responses:    fileResponses,
-			outputWriter: outputWriter,
+		if outputFormat != "stream" {
+			fileResultsChannel <- outputs{
+				UttID:        input.uttID,
+				Responses:    fileResponses,
+				outputWriter: outputWriter,
+			}
 		}
 	}
 	verbosePrintf(os.Stdout, "Worker %d done\n", workerID)

@@ -53,6 +53,7 @@ var outputFormat string
 var nConcurrentRequests int
 var audioChannels []int
 var audioChannelsStereo bool
+var enableRawTranscript bool
 var maxAlternatives int
 
 // Initialize flags.
@@ -86,6 +87,9 @@ func init() {
 	transcribeCmd.Flags().BoolVar(&audioChannelsStereo, "stereo", false, ""+
 		"Sets --audioChannels \"0,1\" to transcribe both audio channels of a stereo file.\n"+
 		"If --audioChannels is set, this flag is ignored.")
+
+	transcribeCmd.Flags().BoolVar(&enableRawTranscript, "enableRawTranscript", false, ""+
+		"Sets the EnableRawTranscript field of the RecognizeRequest to true.")
 
 	transcribeCmd.Flags().IntVarP(&nConcurrentRequests, "workers", "n", 1, ""+
 		"Number of concurrent requests to send to cubicsvr.\n"+
@@ -503,6 +507,10 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 			AudioEncoding: audioEncoding,
 			IdleTimeout:   &pbduration.Duration{Seconds: 30},
 			AudioChannels: audioChannelsUint32,
+		}
+
+		if enableRawTranscript {
+			cfg.EnableRawTranscript = true
 		}
 
 		if outputFormat == "timeline" {

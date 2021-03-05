@@ -152,6 +152,7 @@ func streamFile(ctx context.Context, logger log.Logger, client *cubic.Client, wo
 	// Wrap the audio file in a rate limited reader
 	audioLimited := ratelimit.NewReader(ctx, audio)
 	if rtfRealTime {
+		logger.Debug("msg", "Setting ratelimit", "bytes/sec", audioBPS)
 		audioLimited.SetRateLimit(float64(audioBPS))
 	}
 
@@ -236,6 +237,8 @@ func wavStats(path string) (time.Duration, int, error) {
 	defer audio.Close()
 
 	d := wav.NewDecoder(audio)
+	d.ReadInfo()
+	d.ReadMetadata()
 
 	dur, err := d.Duration()
 	if err != nil {

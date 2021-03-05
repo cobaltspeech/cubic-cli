@@ -121,6 +121,8 @@ func runrtf(logger log.Logger) error {
 }
 
 func streamFile(logger log.Logger, client *cubic.Client, workerID int) (rtfStats, error) {
+	logger = log.With(logger, "workerID", workerID)
+
 	cfg := &cubicpb.RecognitionConfig{
 		ModelId:               rtfModel,
 		AudioEncoding:         cubicpb.RecognitionConfig_WAV,
@@ -146,21 +148,39 @@ func streamFile(logger log.Logger, client *cubic.Client, workerID int) (rtfStats
 		return rtfStats{}, fmt.Errorf("failed to calculate audio duration")
 	}
 
+	startTime := time.Now()
+
 	// Wrap the audio reader to get a timestamp when we are done reading/sending the audio file
 	var streamDoneTime time.Time
+	var bytesSent int64
+	bytesTotal := getFileSize(rtfInputFile)
+	progressCheckpoint := 0.0
 	audioNotify := notifyReader{
 		parent: audio,
-		notifyCallback: func() {
+		eofCallback: func() {
 			logger.Trace("msg", "finished reading audio")
 			streamDoneTime = time.Now()
+		},
+		readCallback: func(n int) {
+			bytesSent += int64(n)
+
+			// Report every 10% of the file
+			progress := float64(bytesSent) / float64(bytesTotal)
+			if progress > progressCheckpoint+0.1 {
+				curDur := time.Now().Sub(startTime)
+				logger.Debug("msg", "Progress Update", "progress", progress, "curDuration", curDur, "estTotalDuration", time.Duration(float64(curDur)/progress))
+
+				// Update checkpoint to the closest 10% increment, rounding down (.57 -> .5, .23 -> .2)
+				progressCheckpoint = float64(int(progress*10)) / 10
+			}
 		},
 	}
 
 	// TODO: consider wrapping the audio reader with a rate limiting reader for "real-time" streaming
-	startTime := time.Now()
+	logger.Debug("msg", "Starting stream", "input", rtfInputFile)
 	streamingErr := client.StreamingRecognize(context.Background(), cfg, audioNotify,
 		func(response *cubicpb.RecognitionResponse) {
-			logger.Trace("msg", "results came back", "workerID", workerID)
+			logger.Trace("msg", "results came back")
 		})
 	endTime := time.Now()
 
@@ -172,7 +192,6 @@ func streamFile(logger log.Logger, client *cubic.Client, workerID int) (rtfStats
 	}
 
 	logger.Debug("msg", "worker finished",
-		"workerID", workerID,
 		"RTF", stats.RTF(),
 		"audioDuration", audioDuration,
 		"transcribeDuration", stats.transcribeDuration,
@@ -183,15 +202,17 @@ func streamFile(logger log.Logger, client *cubic.Client, workerID int) (rtfStats
 }
 
 type notifyReader struct {
-	parent         io.Reader
-	notifyCallback func()
+	parent       io.Reader
+	eofCallback  func()
+	readCallback func(int)
 }
 
 func (tsr notifyReader) Read(buf []byte) (n int, err error) {
 	n, err = tsr.parent.Read(buf)
 	if err == io.EOF {
-		tsr.notifyCallback()
+		tsr.eofCallback()
 	}
+	tsr.readCallback(n)
 	return n, err
 }
 
@@ -225,4 +246,19 @@ func sum(arr []rtfStats) rtfStats {
 
 func (s rtfStats) RTF() float64 {
 	return float64(s.transcribeDuration) / float64(s.audioDuration)
+}
+
+func getFileSize(path string) int64 {
+	f, err := os.Open(path)
+	if err != nil {
+		return -1
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil {
+		return -1
+	}
+
+	return fi.Size()
 }

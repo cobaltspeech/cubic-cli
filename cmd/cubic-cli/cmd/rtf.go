@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cobaltspeech/cubic-cli/internal/ratelimit"
 	"github.com/cobaltspeech/log"
 	"github.com/cobaltspeech/log/pkg/level"
 	cubic "github.com/cobaltspeech/sdk-cubic/grpc/go-cubic"
@@ -98,7 +99,7 @@ func runrtf(logger log.Logger) error {
 	var stats []rtfStats
 	for i := 0; i < rtfNConcurrentRequests; i++ {
 		go func(i int) {
-			s, _ := streamFile(logger, client, i)
+			s, _ := streamFile(context.Background(), logger, client, i)
 			stats = append(stats, s)
 			wg.Done()
 		}(i)
@@ -120,7 +121,7 @@ func runrtf(logger log.Logger) error {
 	return nil
 }
 
-func streamFile(logger log.Logger, client *cubic.Client, workerID int) (rtfStats, error) {
+func streamFile(ctx context.Context, logger log.Logger, client *cubic.Client, workerID int) (rtfStats, error) {
 	logger = log.With(logger, "workerID", workerID)
 
 	cfg := &cubicpb.RecognitionConfig{
@@ -133,6 +134,13 @@ func streamFile(logger log.Logger, client *cubic.Client, workerID int) (rtfStats
 		EnableWordTimeOffsets: true,
 	}
 
+	// Calculate the wav file's duration
+	audioDuration, audioBPS, err := wavStats(rtfInputFile)
+	if err != nil {
+		logger.Error("msg", "failed to calculate audio duration", "path", rtfInputFile, "error", err)
+		return rtfStats{}, fmt.Errorf("failed to calculate audio duration")
+	}
+
 	// Open the file
 	audio, err := os.Open(rtfInputFile)
 	if err != nil {
@@ -141,11 +149,10 @@ func streamFile(logger log.Logger, client *cubic.Client, workerID int) (rtfStats
 	}
 	defer audio.Close()
 
-	// Calculate the wav file's duration
-	audioDuration, err := wavDuration(rtfInputFile)
-	if err != nil {
-		logger.Error("msg", "failed to calculate audio duration", "path", rtfInputFile, "error", err)
-		return rtfStats{}, fmt.Errorf("failed to calculate audio duration")
+	// Wrap the audio file in a rate limited reader
+	audioLimited := ratelimit.NewReader(ctx, audio)
+	if rtfRealTime {
+		audioLimited.SetRateLimit(float64(audioBPS))
 	}
 
 	startTime := time.Now()
@@ -156,11 +163,7 @@ func streamFile(logger log.Logger, client *cubic.Client, workerID int) (rtfStats
 	bytesTotal := getFileSize(rtfInputFile)
 	progressCheckpoint := 0.0
 	audioNotify := notifyReader{
-		parent: audio,
-		eofCallback: func() {
-			logger.Trace("msg", "finished reading audio")
-			streamDoneTime = time.Now()
-		},
+		parent: audioLimited,
 		readCallback: func(n int) {
 			bytesSent += int64(n)
 
@@ -174,11 +177,16 @@ func streamFile(logger log.Logger, client *cubic.Client, workerID int) (rtfStats
 				progressCheckpoint = float64(int(progress*10)) / 10
 			}
 		},
+		eofCallback: func() {
+			curDur := time.Now().Sub(startTime)
+			logger.Debug("msg", "Progress Update", "progress", 1.0, "curDuration", curDur)
+			streamDoneTime = time.Now()
+		},
 	}
 
 	// TODO: consider wrapping the audio reader with a rate limiting reader for "real-time" streaming
 	logger.Debug("msg", "Starting stream", "input", rtfInputFile)
-	streamingErr := client.StreamingRecognize(context.Background(), cfg, audioNotify,
+	streamingErr := client.StreamingRecognize(ctx, cfg, audioNotify,
 		func(response *cubicpb.RecognitionResponse) {
 			logger.Trace("msg", "results came back")
 		})
@@ -203,28 +211,37 @@ func streamFile(logger log.Logger, client *cubic.Client, workerID int) (rtfStats
 
 type notifyReader struct {
 	parent       io.Reader
-	eofCallback  func()
 	readCallback func(int)
+	eofCallback  func()
 }
 
 func (tsr notifyReader) Read(buf []byte) (n int, err error) {
 	n, err = tsr.parent.Read(buf)
 	if err == io.EOF {
-		tsr.eofCallback()
+		if tsr.eofCallback != nil {
+			tsr.eofCallback()
+		}
 	}
-	tsr.readCallback(n)
+	if tsr.readCallback != nil {
+		tsr.readCallback(n)
+	}
 	return n, err
 }
 
-func wavDuration(path string) (time.Duration, error) {
+func wavStats(path string) (time.Duration, int, error) {
 	audio, err := os.Open(rtfInputFile)
 	if err != nil {
-		return 0, fmt.Errorf("failed to read audio file")
+		return 0, 0, fmt.Errorf("failed to read audio file: %v", err)
 	}
 	defer audio.Close()
 
 	d := wav.NewDecoder(audio)
-	return d.Duration()
+
+	dur, err := d.Duration()
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to calculate audio duration: %v", err)
+	}
+	return dur, int(d.AvgBytesPerSec), nil
 }
 
 type rtfStats struct {

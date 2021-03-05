@@ -59,7 +59,7 @@ func clientVersion() string {
 func serverVersion() (string, error) {
 	// Create client connection
 	verbosePrintf(os.Stdout, "Creating connection to server '%s'\n", cubicSvrAddress)
-	client, err := createClient()
+	client, err := createClient(cubicSvrAddress, insecure)
 	if err != nil {
 		return "", err
 	}

@@ -125,13 +125,14 @@ func streamFile(ctx context.Context, logger log.Logger, client *cubic.Client, wo
 	logger = log.With(logger, "workerID", workerID)
 
 	cfg := &cubicpb.RecognitionConfig{
-		ModelId:               rtfModel,
-		AudioEncoding:         cubicpb.RecognitionConfig_WAV,
-		IdleTimeout:           &pbduration.Duration{Seconds: 30},
-		AudioChannels:         []uint32{0},
-		EnableRawTranscript:   true,
-		EnableWordConfidence:  true,
-		EnableWordTimeOffsets: true,
+		ModelId:                rtfModel,
+		AudioEncoding:          cubicpb.RecognitionConfig_WAV,
+		IdleTimeout:            &pbduration.Duration{Seconds: 30},
+		AudioChannels:          []uint32{0},
+		EnableRawTranscript:    true,
+		EnableWordConfidence:   false,
+		EnableWordTimeOffsets:  false,
+		EnableConfusionNetwork: false,
 	}
 
 	// Calculate the wav file's duration

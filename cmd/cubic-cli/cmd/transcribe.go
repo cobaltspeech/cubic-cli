@@ -238,7 +238,7 @@ func transcribe() error {
 	errChannel := make(chan error)
 
 	// Set up a cubicsvr client
-	client, err := createClient()
+	client, err := createClient(cubicSvrAddress, insecure)
 	if err != nil {
 		return err
 	}

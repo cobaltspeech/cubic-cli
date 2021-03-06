@@ -48,6 +48,7 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(modelsCmd)
 	rootCmd.AddCommand(transcribeCmd)
+	rootCmd.AddCommand(rtfCmd)
 
 	rootCmd.PersistentFlags().StringVarP(&cubicSvrAddress, "server", "s", "localhost:2727",
 		"Address of running cubicsvr instance.  Format should be 'address:port'.")
@@ -61,7 +62,7 @@ func init() {
 }
 
 // createClient is a helper function that is shared by models.go, transcribe.go, and version.go
-func createClient() (*cubic.Client, error) {
+func createClient(cubicSvrAddress string, insecure bool) (*cubic.Client, error) {
 	var client *cubic.Client
 	var err error
 

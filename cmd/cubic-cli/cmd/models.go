@@ -31,7 +31,7 @@ var modelsCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Create client connection
 		verbosePrintf(os.Stdout, "Creating connection to server '%s'\n", cubicSvrAddress)
-		client, err := createClient()
+		client, err := createClient(cubicSvrAddress, insecure)
 		if err != nil {
 			return err
 		}

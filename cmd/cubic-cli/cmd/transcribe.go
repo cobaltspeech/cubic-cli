@@ -503,17 +503,19 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 		}
 
 		cfg := &cubicpb.RecognitionConfig{
-			ModelId:       model,
-			AudioEncoding: audioEncoding,
-			IdleTimeout:   &pbduration.Duration{Seconds: 30},
-			AudioChannels: audioChannelsUint32,
+			ModelId:                model,
+			AudioEncoding:          audioEncoding,
+			IdleTimeout:            &pbduration.Duration{Seconds: 30},
+			AudioChannels:          audioChannelsUint32,
+			EnableConfusionNetwork: true,
+			EnableRawTranscript:    true,
 		}
 
 		if enableRawTranscript {
 			cfg.EnableRawTranscript = true
 		}
 
-		if outputFormat == "timeline" {
+		if outputFormat == "timeline" || outputFormat == "json-pretty" {
 			cfg.EnableWordConfidence = true
 			cfg.EnableWordTimeOffsets = true
 		}

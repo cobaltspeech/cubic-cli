@@ -28,7 +28,6 @@ import (
 	"github.com/cobaltspeech/cubic-cli/internal/formatters/results/timeline"
 	cubic "github.com/cobaltspeech/sdk-cubic/grpc/go-cubic"
 	"github.com/cobaltspeech/sdk-cubic/grpc/go-cubic/cubicpb"
-	pbduration "github.com/golang/protobuf/ptypes/duration"
 	"github.com/spf13/cobra"
 )
 
@@ -227,10 +226,10 @@ func statsPath(path string) (isFolder, exists bool, err error) {
 // transcribe is the main function.
 // Flags have been previously verified in the cobra.Cmd.Args function above.
 // It performs the following steps:
-//   1. organizes the input file(s)
-//   2. Starts up n [--workers] worker goroutines
-//   3. passes all audiofiles to the workers
-//   4. Collects the resulting transcription and outputs the results.
+//  1. organizes the input file(s)
+//  2. Starts up n [--workers] worker goroutines
+//  3. passes all audiofiles to the workers
+//  4. Collects the resulting transcription and outputs the results.
 func transcribe() error {
 	// Setup channels for communicating between the various goroutines
 	fileChannel := make(chan inputs)
@@ -505,7 +504,6 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 		cfg := &cubicpb.RecognitionConfig{
 			ModelId:       model,
 			AudioEncoding: audioEncoding,
-			IdleTimeout:   &pbduration.Duration{Seconds: 30},
 			AudioChannels: audioChannelsUint32,
 		}
 
@@ -569,7 +567,9 @@ func transcribeFiles(workerID int, wg *sync.WaitGroup, client *cubic.Client,
 }
 
 // processResultsUtteranceJSON returns a line for each entry in the format of:
-//     {utteranceID}_{segment#} \t {json_serialization_of_results}
+//
+//	{utteranceID}_{segment#} \t {json_serialization_of_results}
+//
 // --output must be "-" (stdout).
 // The order of segments for a given utterance will be chronological.
 // There is no guarantee for the order of utteranceIDs, as results are printed as soon as the file is completed.
